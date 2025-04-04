@@ -911,25 +911,15 @@ POST /exercises/{exercise_id}/submissions
 
 ### ユーザー登録・認証フロー
 
-```
-┌──────────┐     ┌────────────┐      ┌──────────────┐     ┌───────────┐
-│  ユーザー  │────►│ Next.js App │────►│ 認証サービス  │────►│ DB (Users)│
-└──────────┘     └────────────┘      └──────────────┘     └───────────┘
-      │                 ▲                    │
-      │                 │                    ▼
-      │                 │              ┌───────────┐
-      └─────────────────┴──────────────┤JWT Token  │
-                                       └───────────┘
-```
 ```mermaid
 flowchart TD
-    User[ユーザー] -->|1. 登録フォーム送信| NextApp[Next.js App]
-    NextApp -->|2. 認証リクエスト| AuthService[認証サービス]
-    AuthService -->|3. バリデーション・保存| DB[(DB Users)]
-    AuthService -->|4. JWT生成| Token[JWT Token]
-    Token -->|5. トークン返送| NextApp
-    NextApp -->|6. 認証完了| User
-    User -->|7. 以降のリクエスト\nトークン添付| NextApp
+    User[ユーザー] -->|1 登録フォーム送信| NextApp[Next.js App]
+    NextApp -->|2 認証リクエスト| AuthService[認証サービス]
+    AuthService -->|3 バリデーション・保存| DB[(DB Users)]
+    AuthService -->|4 JWT生成| Token[JWT Token]
+    Token -->|5 トークン返送| NextApp
+    NextApp -->|6 認証完了| User
+    User -->|7 以降のリクエスト<br>トークン添付| NextApp
 ```
 
 1. ユーザーが登録フォームを送信
@@ -940,35 +930,17 @@ flowchart TD
 
 ### ロードマップ閲覧・学習フロー
 
-```
-┌──────────┐    ┌────────────┐    ┌───────────────┐    ┌───────────┐
-│  ユーザー  │───►│ Next.js App │───►│ Learning Svc  │───►│ DB        │
-└──────────┘    └────────────┘    └───────────────┘    └───────────┘
-      │                │                  │                  ▲
-      │                │                  ▼                  │
-      │                │           ┌────────────────┐        │
-      │                │           │ Node/Content   │────────┘
-      │                │           │ データ取得      │
-      │                │           └────────────────┘
-      │                │                  │
-      │                ▼                  ▼
-      │          ┌─────────────────────────────────┐
-      └─────────►│  インタラクティブなロードマップ   │
-                 │  と学習コンテンツを表示         │
-                 └─────────────────────────────────┘
-```
-
 ```mermaid
 flowchart TD
-    User[ユーザー] -->|1. ロードマップ\nページアクセス| NextApp[Next.js App]
-    NextApp -->|2. データリクエスト| LearningSvc[Learning Svc]
-    LearningSvc -->|3. データ取得| DB[(DB)]
-    LearningSvc -->|4. ロードマップ・ノード取得| NodeContent[Node/Content\nデータ取得]
-    NodeContent -->|5. データ読み込み| DB
-    NodeContent -->|6. データ返送| LearningSvc
-    LearningSvc -->|7. レスポンス| NextApp
-    NextApp -->|8. UI表示| RoadmapUI[インタラクティブな\nロードマップと\n学習コンテンツを表示]
-    User -->|9. ノードクリック\nコンテンツ消費| RoadmapUI
+    User[ユーザー] -->|1 ロードマップ<br>ページアクセス| NextApp[Next.js App]
+    NextApp -->|2 データリクエスト| LearningSvc[Learning Svc]
+    LearningSvc -->|3 データ取得| DB[(DB)]
+    LearningSvc -->|4 ロードマップ・ノード取得| NodeContent[Node/Content<br>データ取得]
+    NodeContent -->|5 データ読み込み| DB
+    NodeContent -->|6 データ返送| LearningSvc
+    LearningSvc -->|7 レスポンス| NextApp
+    NextApp -->|8 UI表示| RoadmapUI[インタラクティブな<br>ロードマップと<br>学習コンテンツを表示]
+    User -->|9 ノードクリック<br>コンテンツ消費| RoadmapUI
 ```
 
 1. ユーザーがロードマップページにアクセス
@@ -980,33 +952,17 @@ flowchart TD
 
 ### 進捗追跡フロー
 
-```
-┌──────────┐    ┌────────────┐    ┌───────────────┐    ┌───────────┐
-│  ユーザー  │───►│ Next.js App │───►│ Learning Svc  │───►│ DB        │
-└──────────┘    └────────────┘    └───────────────┘    └───────────┘
-      ▲                │                  │                  ▲
-      │                │                  │                  │
-      │                │                  ▼                  │
-      │                │           ┌────────────────┐        │
-      │                │           │ 進捗データ処理  │────────┘
-      │                │           └────────────────┘
-      │                │                  │
-      │                ▼                  │
-      │          ┌─────────────────────────────────┐
-      └──────────┤  進捗表示とバッジ/報酬付与      │◄────┘
-                 └─────────────────────────────────┘
-```
 ```mermaid
 flowchart TD
-    User[ユーザー] -->|1. コンテンツ完了\n進捗更新| NextApp[Next.js App]
-    NextApp -->|2. 進捗情報送信| LearningSvc[Learning Svc]
-    LearningSvc -->|3. 進捗保存| DB[(DB)]
-    LearningSvc -->|4. 進捗処理| ProgressProc[進捗データ処理]
-    ProgressProc -->|5. データ更新| DB
-    ProgressProc -->|6. 進捗情報返送| LearningSvc
-    LearningSvc -->|7. 状態更新| NextApp
-    NextApp -->|8. UI更新| ProgressUI[進捗表示と\nバッジ/報酬付与]
-    ProgressUI -->|9. 新しい進捗・\n報酬表示| User
+    User[ユーザー] -->|1 コンテンツ完了<br>進捗更新| NextApp[Next.js App]
+    NextApp -->|2 進捗情報送信| LearningSvc[Learning Svc]
+    LearningSvc -->|3 進捗保存| DB[(DB)]
+    LearningSvc -->|4 進捗処理| ProgressProc[進捗データ処理]
+    ProgressProc -->|5 データ更新| DB
+    ProgressProc -->|6 進捗情報返送| LearningSvc
+    LearningSvc -->|7 状態更新| NextApp
+    NextApp -->|8 UI更新| ProgressUI[進捗表示と<br>バッジ/報酬付与]
+    ProgressUI -->|9 新しい進捗・<br>報酬表示| User
 ```
 
 1. ユーザーが学習コンテンツを完了または進捗状態を更新
@@ -1017,33 +973,17 @@ flowchart TD
 
 ### AIサポートフロー
 
-```
-┌──────────┐    ┌────────────┐    ┌───────────────┐    ┌───────────────┐
-│  ユーザー  │───►│ Next.js App │───►│ AI Service    │───►│ OpenAI API    │
-└──────────┘    └────────────┘    └───────────────┘    └───────────────┘
-      ▲                │                  │                      │
-      │                │                  ▼                      │
-      │                │           ┌────────────────┐            │
-      │                │           │ コンテキスト   │            │
-      │                │           │ エンリッチメント│◄───────────┘
-      │                │           └────────────────┘
-      │                │                  │
-      │                ▼                  ▼
-      │          ┌─────────────────────────────────┐
-      └──────────┤  AIレスポンス表示              │◄────┘
-                 └─────────────────────────────────┘
-```
 ```mermaid
 flowchart TD
-    User[ユーザー] -->|1. 質問入力\n支援要求| NextApp[Next.js App]
-    NextApp -->|2. 質問・コンテキスト送信| AISvc[AI Service]
-    AISvc -->|3. API呼び出し| OpenAI[OpenAI API]
-    OpenAI -->|4. 応答返送| AISvc
-    AISvc -->|5. コンテキスト処理| Context[コンテキスト\nエンリッチメント]
-    Context -->|6. 情報追加| AISvc
-    AISvc -->|7. 最適化応答| NextApp
-    NextApp -->|8. UI更新| AIResponse[AIレスポンス表示]
-    AIResponse -->|9. 回答表示| User
+    User[ユーザー] -->|1 質問入力<br>支援要求| NextApp[Next.js App]
+    NextApp -->|2 質問・コンテキスト送信| AISvc[AI Service]
+    AISvc -->|3 API呼び出し| OpenAI[OpenAI API]
+    OpenAI -->|4 応答返送| AISvc
+    AISvc -->|5 コンテキスト処理| Context[コンテキスト<br>エンリッチメント]
+    Context -->|6 情報追加| AISvc
+    AISvc -->|7 最適化応答| NextApp
+    NextApp -->|8 UI更新| AIResponse[AIレスポンス表示]
+    AIResponse -->|9 回答表示| User
 ```
 
 1. ユーザーが質問を入力または支援を要求
@@ -1054,78 +994,62 @@ flowchart TD
 
 ### コード実行フロー
 
-```
-┌──────────┐    ┌────────────┐    ┌───────────────┐    ┌───────────────┐
-│  ユーザー  │───►│ Next.js App │───►│ Execution Env │───►│ サンドボックス  │
-└──────────┘    └────────────┘    └───────────────┘    └───────────────┘
-      ▲                │                  │                      │
-      │                │                  │                      │
-      │                │                  │                      │
-      │                │                  ▼                      ▼
-      │                │           ┌────────────────┐     ┌────────────┐
-      │                │           │ 実行結果処理   │◄────┤ コード実行 │
-      │                │           └────────────────┘     └────────────┘
-      │                │                  │
-      │                ▼                  │
-      │          ┌─────────────────────────────────┐
-      └──────────┤  実行結果表示                  │◄────┘
-                 └─────────────────────────────────┘
-```
+
+
 ```mermaid
 flowchart TD
-    User[ユーザー] -->|1. コード入力\n実行リクエスト| NextApp[Next.js App]
-    NextApp -->|2. コード送信| ExecEnv[Execution Env]
-    ExecEnv -->|3. コード転送| Sandbox[サンドボックス]
-    Sandbox -->|4. 安全実行| CodeExec[コード実行]
-    CodeExec -->|5. 実行結果| ResultProc[実行結果処理]
-    ResultProc -->|6. 結果整形| ExecEnv
-    ExecEnv -->|7. 結果返送| NextApp
-    NextApp -->|8. UI更新| ResultUI[実行結果表示]
-    ResultUI -->|9. 結果表示| User
+    User[ユーザー] -->|1 コード入力と実行ボタン押下| NextApp[Next.jsアプリ]
+    NextApp -->|2 コードと実行パラメータ送信| ExecService["実行環境サービス<br>(FastAPI)"]
+    ExecService -->|3 コード送信| Sandbox["コード実行サンドボックス<br>(安全な隔離環境)"]
+    Sandbox -->|4 コードを安全に実行| CodeExec[コード実行エンジン]
+    CodeExec -->|5 実行結果返送| Sandbox
+    Sandbox -->|6 実行結果返送| ExecService
+    ExecService -->|"7 結果処理<br>(フォーマット・検証)"| ResultProc[実行結果処理]
+    ResultProc -->|8 処理済み結果| ExecService
+    ExecService -->|9 結果データ返送| NextApp
+    NextApp -->|10 画面更新| ResultUI[実行結果UI表示]
+    ResultUI -->|11 結果確認| User
 ```
 
-1. ユーザーがコードエディタでコードを入力し実行
-2. Next.jsアプリが実行環境サービスにコードを送信
-3. 実行環境がサンドボックス内でコードを安全に実行
-4. 実行結果（出力、エラー、テスト結果など）が処理される
-5. 結果がユーザーインターフェースに表示される
+1. ユーザーアクション:  
+ユーザーがブラウザ上のコードエディタでコードを書き、「実行」ボタンをクリック
+2. フロントエンド処理:  
+Next.jsアプリがコードと実行に必要なパラメータ（言語、設定など）を実行環境サービスに送信
+3. 実行環境サービス:  
+MapStackのバックエンド（FastAPI）がコードを受け取り、安全性チェックを行った後、サンドボックス環境に転送
+4. サンドボックス環境:  
+    - システムの他の部分と完全に隔離された安全な実行環境
+    - Dockerコンテナなど独立した環境で実装
+    - リソース制限（CPU、メモリ、実行時間）を設定
+    - ファイルシステムとネットワークアクセスを制限
+5. コード実行:  
+    - サンドボックス内のコード実行エンジンがユーザーのコードを実行
+    - プログラミング言語に応じた処理（コンパイル・インタープリタなど）
+    - 標準出力、標準エラー出力、実行結果を収集
+6. 結果処理:  
+    - 実行結果（出力、エラー、コンパイルメッセージなど）をサンドボックスから回収
+    - 結果を構造化されたデータに変換
+    - テストケースがある場合は合否判定を追加
+    - 実行時メトリクス（実行時間、メモリ使用量など）を記録
+7. 結果表示:  
+    - 処理された結果データがフロントエンドに送信される
+    - Next.jsアプリが結果データを受け取り、ユーザーインターフェースを更新
+    - ユーザーに分かりやすく結果を表示（構文ハイライト、エラー位置表示など）
 
 ### 演習・課題評価フロー
 
-```
-┌──────────┐    ┌────────────┐    ┌───────────────┐    ┌───────────┐
-│  ユーザー  │───►│ Next.js App │───►│ Learning Svc  │───►│ DB        │
-└──────────┘    └────────────┘    └───────────────┘    └───────────┘
-      ▲                │                  │                  ▲
-      │                │                  ▼                  │
-      │                │           ┌────────────────┐        │
-      │                │           │ 実行・評価     │────────┘
-      │                │           │ サービス       │
-      │                │           └───────┬────────┘
-      │                │                   │
-      │                │                   ▼
-      │                │           ┌────────────────┐
-      │                │           │ AI評価・      │
-      │                │           │ フィードバック  │
-      │                │           └────────────────┘
-      │                │                  │
-      │                ▼                  │
-      │          ┌─────────────────────────────────┐
-      └──────────┤  評価結果・フィードバック表示   │◄────┘
-                 └─────────────────────────────────┘
-```
 ```mermaid
 flowchart TD
-    User[ユーザー] -->|1. 演習課題\n解答提出| NextApp[Next.js App]
-    NextApp -->|2. 解答送信| LearningSvc[Learning Svc]
-    LearningSvc -->|3. 解答転送| EvalSvc[実行・評価\nサービス]
-    EvalSvc -->|4. データ保存| DB[(DB)]
-    EvalSvc -->|5. 解答分析| AIFeedback[AI評価・\nフィードバック]
-    AIFeedback -->|6. 評価結果| EvalSvc
-    EvalSvc -->|7. 結果返送| LearningSvc
-    LearningSvc -->|8. 表示データ| NextApp
-    NextApp -->|9. UI更新| FeedbackUI[評価結果・\nフィードバック表示]
-    FeedbackUI -->|10. 結果表示| User
+    User[ユーザー] -->|1 演習課題<br>解答提出| NextApp[Next.js App]
+    NextApp -->|2 解答送信| LearningSvc[Learning Svc]
+    LearningSvc -->|3 解答転送| EvalSvc[実行・評価<br>サービス]
+    EvalSvc -->|4 データ保存| DB[(DB)]
+    EvalSvc -->|5 解答分析| AIFeedback[AI評価・<br>フィードバック]
+    AIFeedback -->|6 評価結果| EvalSvc
+    EvalSvc -->|7 結果返送| LearningSvc
+    LearningSvc -->|8 表示データ| NextApp
+    NextApp -->|9 UI更新| FeedbackUI[評価結果・<br>フィードバック表示]
+    FeedbackUI -->|10 結果表示| User
 ```
 
 1. ユーザーが演習課題の解答を提出
