@@ -1,0 +1,276 @@
+---
+description: TypeScript Design Principles and Implementation Guidelines in MapStack
+globs: 
+alwaysApply: false
+---
+---
+title: TypeScript規約
+description: MapStackにおけるTypeScriptの設計原則と実装規約
+category: frontend
+importance: high
+last_updated: 2025-04-13
+---
+
+# TypeScript規約
+
+## 1. 基本原則
+
+### 1.1 型の使用
+- `any`型の使用を避ける
+- 明示的な型アノテーションを使用
+- 型推論を活用するが、複雑な型は明示的に定義
+- `unknown`型を`any`の代わりに使用
+
+```tsx
+// 良い例
+const user: User = { id: 1, name: 'John' }
+const handleClick = (event: React.MouseEvent<HTMLButtonElement>) => {}
+
+// 悪い例
+const user: any = { id: 1, name: 'John' }
+const handleClick = (event: any) => {}
+```
+
+### 1.2 型定義の場所
+- 型定義はファイルの先頭に配置
+- 再利用可能な型は`types`ディレクトリに配置
+- コンポーネント固有の型はコンポーネントファイル内に配置
+
+```tsx
+// types/user.ts
+export interface User {
+  id: number
+  name: string
+  email: string
+  role: UserRole
+}
+
+// components/UserCard.tsx
+interface UserCardProps {
+  user: User
+  onEdit: (user: User) => void
+}
+```
+
+## 2. インターフェースとタイプ
+
+### 2.1 インターフェースの使用
+- オブジェクトの型定義には`interface`を使用
+- 拡張可能な型には`interface`を使用
+- メソッドの定義には`interface`を使用
+
+```tsx
+interface User {
+  id: number
+  name: string
+  getFullName(): string
+}
+
+interface AdminUser extends User {
+  permissions: string[]
+}
+```
+
+### 2.2 タイプの使用
+- ユニオン型やインターセクション型には`type`を使用
+- プリミティブ型のエイリアスには`type`を使用
+- タプル型には`type`を使用
+
+```tsx
+type UserRole = 'admin' | 'user' | 'guest'
+type UserId = number
+type UserTuple = [string, number, boolean]
+```
+
+## 3. ジェネリクス
+
+### 3.1 ジェネリクスの使用
+- 再利用可能なコンポーネントや関数で使用
+- 型パラメータには明確な名前を使用
+- 制約を適切に設定
+
+```tsx
+interface PaginatedResponse<T> {
+  data: T[]
+  total: number
+  page: number
+  perPage: number
+}
+
+function usePagination<T>(data: T[]): PaginatedResponse<T> {
+  // 実装
+}
+```
+
+### 3.2 コンポーネントでのジェネリクス
+```tsx
+interface ListProps<T> {
+  items: T[]
+  renderItem: (item: T) => React.ReactNode
+}
+
+function List<T>({ items, renderItem }: ListProps<T>) {
+  return (
+    <ul>
+      {items.map((item, index) => (
+        <li key={index}>{renderItem(item)}</li>
+      ))}
+    </ul>
+  )
+}
+```
+
+## 4. ユーティリティ型
+
+### 4.1 一般的なユーティリティ型
+```tsx
+// Partial: すべてのプロパティをオプショナルに
+type PartialUser = Partial<User>
+
+// Pick: 特定のプロパティのみを選択
+type UserBasicInfo = Pick<User, 'id' | 'name'>
+
+// Omit: 特定のプロパティを除外
+type UserWithoutId = Omit<User, 'id'>
+
+// Record: キーと値の型を指定
+type UserRoles = Record<string, UserRole>
+```
+
+### 4.2 カスタムユーティリティ型
+```tsx
+// Nullable: null許容型
+type Nullable<T> = T | null
+
+// Maybe: undefined許容型
+type Maybe<T> = T | undefined
+
+// DeepPartial: ネストされたオブジェクトもPartialに
+type DeepPartial<T> = {
+  [P in keyof T]?: T[P] extends object ? DeepPartial<T[P]> : T[P]
+}
+```
+
+## 5. 型ガード
+
+### 5.1 型ガードの使用
+```tsx
+// 型述語を使用した型ガード
+function isUser(obj: unknown): obj is User {
+  return (
+    typeof obj === 'object' &&
+    obj !== null &&
+    'id' in obj &&
+    'name' in obj
+  )
+}
+
+// 型ガードの使用例
+function processUser(data: unknown) {
+  if (isUser(data)) {
+    // dataはUser型として扱える
+    console.log(data.name)
+  }
+}
+```
+
+### 5.2 ユーティリティ関数
+```tsx
+// 型安全なユーティリティ関数
+function assertNever(x: never): never {
+  throw new Error('Unexpected object: ' + x)
+}
+
+function exhaustiveCheck(value: never) {
+  return assertNever(value)
+}
+```
+
+## 6. 非同期処理
+
+### 6.1 Promiseとasync/await
+```tsx
+// Promiseの型定義
+type ApiResponse<T> = Promise<{
+  data: T
+  status: number
+  message: string
+}>
+
+// async関数の型定義
+async function fetchUser(id: number): ApiResponse<User> {
+  const response = await fetch(`/api/users/${id}`)
+  return response.json()
+}
+```
+
+### 6.2 エラーハンドリング
+```tsx
+// カスタムエラークラス
+class ApiError extends Error {
+  constructor(
+    public status: number,
+    public message: string,
+    public code?: string
+  ) {
+    super(message)
+    this.name = 'ApiError'
+  }
+}
+
+// エラーハンドリングの型定義
+type Result<T> = {
+  data: T | null
+  error: ApiError | null
+}
+
+async function safeFetch<T>(url: string): Promise<Result<T>> {
+  try {
+    const response = await fetch(url)
+    if (!response.ok) {
+      throw new ApiError(response.status, 'API request failed')
+    }
+    const data = await response.json()
+    return { data, error: null }
+  } catch (error) {
+    return {
+      data: null,
+      error: error instanceof ApiError ? error : new ApiError(500, 'Unknown error')
+    }
+  }
+}
+```
+
+## 7. テスト
+
+### 7.1 テストの型定義
+```tsx
+// テスト用の型定義
+type TestProps<T> = {
+  data: T
+  expected: T
+  testName: string
+}
+
+// テストケースの型定義
+interface TestCase<T> {
+  input: T
+  expected: T
+  description: string
+}
+```
+
+### 7.2 モックの型定義
+```tsx
+// モック関数の型定義
+type MockFunction<T extends (...args: any[]) => any> = jest.MockInstance<
+  ReturnType<T>,
+  Parameters<T>
+>
+
+// モックオブジェクトの型定義
+interface MockUserService {
+  getUser: MockFunction<typeof UserService.prototype.getUser>
+  updateUser: MockFunction<typeof UserService.prototype.updateUser>
+}
+```

@@ -1,0 +1,755 @@
+---
+description: Backend Testing Implementation Strategy and Practices in MapStack
+globs: 
+alwaysApply: false
+---
+---
+title: バックエンドテスト戦略
+description: MapStackにおけるバックエンドのテスト実装方針と実践
+category: backend
+importance: high
+last_updated: 2025-04-13
+---
+
+# バックエンドテスト戦略
+
+## 1. テスト階層と方針
+
+### 1.1 テスト種類と責任範囲
+バックエンドにおけるテストは以下の種類を実装します：
+
+| テスト種類 | ツール | 責任範囲 | 実行頻度 |
+|-----------|------|----------|---------|
+| ユニットテスト | pytest | 個別関数/メソッド<br>ビジネスロジック | 開発時、PR毎 |
+| 統合テスト | pytest + TestClient | API統合<br>DB操作<br>コンポーネント連携 | PR毎 |
+| E2Eテスト | pytest + TestClient | 主要APIフロー<br>エンドツーエンドプロセス | 日次、リリース前 |
+| パフォーマンステスト | locust | 負荷テスト<br>応答時間<br>スケーラビリティ | 週次、重要変更時 |
+
+### 1.2 カバレッジ要件
+- **サービス層**: 90%以上
+- **モデル**: 85%以上
+- **APIエンドポイント**: 80%以上
+- **ユーティリティ/ヘルパー**: 90%以上
+- **全体**: 85%以上
+
+### 1.3 テストツールセット
+- **テストフレームワーク**: pytest
+- **APIテスト**: FastAPI TestClient
+- **モック作成**: unittest.mock, pytest-mock
+- **カバレッジ計測**: pytest-cov
+- **DB管理**: pytest-postgresql, pytest fixtures
+- **負荷テスト**: locust
+
+## 2. ユニットテスト
+
+### 2.1 テスト対象
+- ビジネスロジック（サービス層）
+- ユーティリティ関数
+- ヘルパー関数
+- モデルメソッド
+
+### 2.2 pytestでのユニットテスト実装
+
+```python
+# app/utils/formatters.py
+def format_currency(amount: float, currency: str = "JPY") -> str:
+    """金額をフォーマットする"""
+    if currency == "JPY":
+        return f"¥{int(amount):,}"
+    elif currency == "USD":
+        return f"${amount:.2f}"
+    else:
+        return f"{amount} {currency}"
+
+# tests/utils/test_formatters.py
+import pytest
+from app.utils.formatters import format_currency
+
+def test_format_currency_jpy():
+    """JPY通貨のフォーマットをテスト"""
+    # Arrange
+    amount = 10000
+    
+    # Act
+    result = format_currency(amount)
+    
+    # Assert
+    assert result == "¥10,000"
+
+def test_format_currency_usd():
+    """USD通貨のフォーマットをテスト"""
+    # Arrange
+    amount = 99.95
+    currency = "USD"
+    
+    # Act
+    result = format_currency(amount, currency)
+    
+    # Assert
+    assert result == "$99.95"
+
+def test_format_currency_other():
+    """その他の通貨のフォーマットをテスト"""
+    # Arrange
+    amount = 100
+    currency = "EUR"
+    
+    # Act
+    result = format_currency(amount, currency)
+    
+    # Assert
+    assert result == "100 EUR"
+```
+
+### 2.3 サービス層のテスト
+
+```python
+# app/services/user_service.py
+from sqlalchemy.orm import Session
+from app.models.user import User
+from app.schemas.user import UserCreate
+from app.utils.security import get_password_hash
+
+def create_user(db: Session, user_data: UserCreate) -> User:
+    """新規ユーザーを作成する"""
+    hashed_password = get_password_hash(user_data.password)
+    db_user = User(
+        email=user_data.email,
+        hashed_password=hashed_password,
+        full_name=user_data.full_name
+    )
+    db.add(db_user)
+    db.commit()
+    db.refresh(db_user)
+    return db_user
+
+# tests/services/test_user_service.py
+import pytest
+from unittest.mock import Mock
+from app.services.user_service import create_user
+from app.schemas.user import UserCreate
+
+def test_create_user(mocker):
+    """ユーザー作成機能のテスト"""
+    # Arrange
+    # モックの設定
+    mock_db = Mock()
+    mock_hash = mocker.patch('app.services.user_service.get_password_hash', return_value='hashed_password')
+    
+    user_data = UserCreate(
+        email="test@example.com",
+        password="password123",
+        full_name="Test User"
+    )
+    
+    # Act
+    result = create_user(mock_db, user_data)
+    
+    # Assert
+    # DBへの追加、コミット、リフレッシュが呼ばれたことを確認
+    mock_db.add.assert_called_once()
+    mock_db.commit.assert_called_once()
+    mock_db.refresh.assert_called_once()
+    
+    # パスワードハッシュ関数が呼ばれたことを確認
+    mock_hash.assert_called_once_with("password123")
+    
+    # ユーザーが正しく作成されたことを確認
+    assert result.email == "test@example.com"
+    assert result.hashed_password == "hashed_password"
+    assert result.full_name == "Test User"
+```
+
+## 3. 統合テスト
+
+### 3.1 テスト対象
+- APIエンドポイント
+- データベース操作
+- サービス間の連携
+- 外部依存関係の統合
+
+### 3.2 テスト用DBの設定
+統合テスト用のデータベース設定を以下のように実装します：
+
+```python
+# tests/conftest.py
+import pytest
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
+from fastapi.testclient import TestClient
+
+from app.main import app
+from app.core.config import settings
+from app.db.base import Base
+from app.core.deps import get_db
+
+@pytest.fixture(scope="session")
+def test_db_engine():
+    """テスト用のDBエンジンを作成"""
+    # インメモリSQLiteを使用
+    engine = create_engine(
+        "sqlite:///./test.db",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(bind=engine)
+    yield engine
+    # テスト後にDBファイルを削除
+    import os
+    if os.path.exists("./test.db"):
+        os.remove("./test.db")
+
+@pytest.fixture
+def db_session(test_db_engine):
+    """テスト用のDBセッションを提供"""
+    Session = sessionmaker(autocommit=False, autoflush=False, bind=test_db_engine)
+    session = Session()
+    try:
+        yield session
+    finally:
+        session.close()
+
+@pytest.fixture
+def client(db_session):
+    """テスト用のAPIクライアント"""
+    # DBセッションを差し替え
+    def override_get_db():
+        try:
+            yield db_session
+        finally:
+            pass
+    
+    app.dependency_overrides[get_db] = override_get_db
+    with TestClient(app) as test_client:
+        yield test_client
+    
+    # 終了時にDIオーバーライドをクリア
+    app.dependency_overrides.clear()
+```
+
+### 3.3 APIエンドポイントのテスト
+
+```python
+# tests/api/test_users.py
+from fastapi import status
+import pytest
+from app.models.user import User
+
+def test_create_user_api(client, db_session):
+    """ユーザー作成APIをテスト"""
+    # Arrange
+    user_data = {
+        "email": "new@example.com",
+        "password": "password123",
+        "full_name": "New User"
+    }
+    
+    # Act
+    response = client.post("/api/v1/users/", json=user_data)
+    
+    # Assert
+    assert response.status_code == status.HTTP_201_CREATED
+    data = response.json()
+    assert data["email"] == user_data["email"]
+    assert data["full_name"] == user_data["full_name"]
+    assert "id" in data
+    
+    # DBに反映されていることを確認
+    db_user = db_session.query(User).filter(User.email == user_data["email"]).first()
+    assert db_user is not None
+    assert db_user.full_name == user_data["full_name"]
+
+def test_get_user_not_found(client):
+    """存在しないユーザーの取得をテスト"""
+    # Act
+    response = client.get("/api/v1/users/999")
+    
+    # Assert
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+    data = response.json()
+    assert "detail" in data
+```
+
+### 3.4 外部依存関係のモック
+
+```python
+# tests/api/test_external_services.py
+import pytest
+from unittest.mock import patch
+from fastapi import status
+
+def test_weather_api_integration(client, mocker):
+    """外部天気APIとの統合テスト"""
+    # 外部APIをモック
+    mock_response = {
+        "location": "Tokyo",
+        "temperature": 20.5,
+        "condition": "Sunny"
+    }
+    mocker.patch('app.services.weather_service.fetch_weather', return_value=mock_response)
+    
+    # Act
+    response = client.get("/api/v1/weather/tokyo")
+    
+    # Assert
+    assert response.status_code == status.HTTP_200_OK
+    data = response.json()
+    assert data["location"] == "Tokyo"
+    assert data["temperature"] == 20.5
+    assert data["condition"] == "Sunny"
+```
+
+## 4. E2Eテスト
+
+### 4.1 テスト対象
+- クリティカルなAPIフロー
+- 複数のエンドポイントを横断する処理
+- 認証・認可フロー
+- 統合ワークフロー
+
+### 4.2 E2Eテストの実装例
+
+```python
+# tests/e2e/test_user_workflow.py
+import pytest
+from fastapi import status
+
+@pytest.mark.e2e
+def test_user_complete_workflow(client, db_session):
+    """ユーザー関連の全体的なワークフロー"""
+    # ユーザー登録
+    register_data = {
+        "email": "workflow@example.com",
+        "password": "securepass123",
+        "full_name": "Workflow User"
+    }
+    response = client.post("/api/v1/users/", json=register_data)
+    assert response.status_code == status.HTTP_201_CREATED
+    user_id = response.json()["id"]
+    
+    # ログイン
+    login_data = {
+        "username": register_data["email"],
+        "password": register_data["password"]
+    }
+    response = client.post("/api/v1/auth/login", data=login_data)
+    assert response.status_code == status.HTTP_200_OK
+    tokens = response.json()
+    assert "access_token" in tokens
+    
+    # 認証が必要なAPIを呼び出し
+    headers = {"Authorization": f"Bearer {tokens['access_token']}"}
+    response = client.get(f"/api/v1/users/{user_id}", headers=headers)
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json()["email"] == register_data["email"]
+    
+    # プロフィール更新
+    update_data = {
+        "full_name": "Updated Name",
+        "bio": "My new bio"
+    }
+    response = client.patch(f"/api/v1/users/{user_id}", headers=headers, json=update_data)
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json()["full_name"] == update_data["full_name"]
+    
+    # ユーザー削除
+    response = client.delete(f"/api/v1/users/{user_id}", headers=headers)
+    assert response.status_code == status.HTTP_204_NO_CONTENT
+    
+    # 削除確認
+    response = client.get(f"/api/v1/users/{user_id}", headers=headers)
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+```
+
+## 5. データベーステスト
+
+### 5.1 モデルのテスト
+
+```python
+# tests/models/test_user_model.py
+import pytest
+from app.models.user import User
+from datetime import datetime
+
+def test_user_creation(db_session):
+    """ユーザーモデルの作成と保存をテスト"""
+    # Arrange
+    user = User(
+        email="model@example.com",
+        hashed_password="hashed_pw",
+        full_name="Model Test",
+        is_active=True
+    )
+    
+    # Act
+    db_session.add(user)
+    db_session.commit()
+    
+    # Assert
+    saved_user = db_session.query(User).filter(User.email == "model@example.com").first()
+    assert saved_user is not None
+    assert saved_user.full_name == "Model Test"
+    assert saved_user.is_active is True
+    assert isinstance(saved_user.created_at, datetime)
+
+def test_user_relationships(db_session):
+    """ユーザーとその関連エンティティのテスト"""
+    # このテストは関連エンティティの設定に依存
+    # 例：ユーザーとそのタスクの関係をテスト
+    pass
+```
+
+### 5.2 マイグレーションのテスト
+
+```python
+# tests/db/test_migrations.py
+import pytest
+import subprocess
+import os
+
+@pytest.mark.slow
+def test_migrations():
+    """マイグレーションの適用とロールバックをテスト"""
+    # 環境変数設定（テスト用DB）
+    test_db_url = "postgresql://postgres:postgres@localhost/test_migrations"
+    env = os.environ.copy()
+    env["DATABASE_URL"] = test_db_url
+    
+    try:
+        # マイグレーションを最新まで適用
+        result = subprocess.run(
+            ["alembic", "upgrade", "head"],
+            env=env,
+            check=True,
+            capture_output=True,
+            text=True
+        )
+        assert result.returncode == 0
+        
+        # 一つ前にロールバック
+        result = subprocess.run(
+            ["alembic", "downgrade", "-1"],
+            env=env,
+            check=True,
+            capture_output=True,
+            text=True
+        )
+        assert result.returncode == 0
+        
+        # 再度最新に戻す
+        result = subprocess.run(
+            ["alembic", "upgrade", "head"],
+            env=env,
+            check=True,
+            capture_output=True,
+            text=True
+        )
+        assert result.returncode == 0
+    except subprocess.CalledProcessError as e:
+        pytest.fail(f"マイグレーションテスト失敗: {e.stdout}\n{e.stderr}")
+```
+
+## 6. 負荷テストとパフォーマンス
+
+### 6.1 Locustによる負荷テスト
+
+```python
+# tests/performance/locustfile.py
+from locust import HttpUser, task, between
+
+class WebsiteUser(HttpUser):
+    wait_time = between(1, 5)  # タスク間の待機時間を1〜5秒でランダム化
+    
+    def on_start(self):
+        """ユーザーがテスト開始時に実行する処理（ログインなど）"""
+        response = self.client.post("/api/v1/auth/login", data={
+            "username": "performance@example.com",
+            "password": "testpassword"
+        })
+        if response.status_code == 200:
+            self.token = response.json()["access_token"]
+            self.headers = {"Authorization": f"Bearer {self.token}"}
+        else:
+            self.token = None
+            self.headers = {}
+    
+    @task(3)  # 重み付け：他のタスクの3倍の頻度で実行
+    def view_user_profile(self):
+        """ユーザープロフィール表示のパフォーマンスをテスト"""
+        if hasattr(self, 'headers'):
+            self.client.get("/api/v1/users/me", headers=self.headers)
+    
+    @task
+    def get_tasks(self):
+        """タスク一覧取得のパフォーマンスをテスト"""
+        if hasattr(self, 'headers'):
+            self.client.get("/api/v1/tasks/", headers=self.headers)
+    
+    @task
+    def create_task(self):
+        """タスク作成のパフォーマンスをテスト"""
+        if hasattr(self, 'headers'):
+            self.client.post(
+                "/api/v1/tasks/",
+                headers=self.headers,
+                json={
+                    "title": "Performance test task",
+                    "description": "Testing task creation performance",
+                    "due_date": "2023-12-31T23:59:59Z",
+                    "priority": "medium"
+                }
+            )
+```
+
+### 6.2 パフォーマンステストの実行
+
+```bash
+# 負荷テスト実行コマンド
+locust -f tests/performance/locustfile.py --host=http://localhost:8000 --users=100 --spawn-rate=10 --headless --run-time=1m
+```
+
+## 7. モック戦略
+
+### 7.1 モックの適切な使用
+
+```python
+# tests/services/test_notification_service.py
+import pytest
+from unittest.mock import patch, MagicMock
+from app.services.notification_service import send_email_notification
+
+def test_send_email_notification(mocker):
+    """メール通知機能のテスト（外部依存をモック）"""
+    # Arrange
+    mock_send = mocker.patch('app.services.notification_service.send_mail')
+    
+    # Act
+    result = send_email_notification(
+        to="user@example.com",
+        subject="Test Subject",
+        body="Test Body"
+    )
+    
+    # Assert
+    mock_send.assert_called_once()
+    call_args = mock_send.call_args[1]  # キーワード引数を取得
+    assert call_args["to"] == "user@example.com"
+    assert call_args["subject"] == "Test Subject"
+    assert "Test Body" in call_args["html_content"]
+    assert result is True
+
+def test_send_email_notification_error(mocker):
+    """メール送信エラーのテスト"""
+    # Arrange
+    mock_send = mocker.patch(
+        'app.services.notification_service.send_mail',
+        side_effect=Exception("SMTP Error")
+    )
+    
+    # Act
+    result = send_email_notification(
+        to="user@example.com",
+        subject="Test Subject",
+        body="Test Body"
+    )
+    
+    # Assert
+    mock_send.assert_called_once()
+    assert result is False
+```
+
+### 7.2 ファクトリを使ったテストデータ生成
+
+```python
+# tests/factories.py
+import factory
+from factory.alchemy import SQLAlchemyModelFactory
+from app.models.user import User
+from app.models.task import Task
+import uuid
+from datetime import datetime, timedelta
+
+class UserFactory(SQLAlchemyModelFactory):
+    """ユーザーモデルのファクトリ"""
+    class Meta:
+        model = User
+        sqlalchemy_session_persistence = "commit"
+    
+    id = factory.LazyFunction(lambda: str(uuid.uuid4()))
+    email = factory.Sequence(lambda n: f"user{n}@example.com")
+    hashed_password = "hashed_password_for_test"
+    full_name = factory.Faker('name')
+    is_active = True
+    created_at = factory.LazyFunction(datetime.utcnow)
+    updated_at = factory.LazyFunction(datetime.utcnow)
+
+class TaskFactory(SQLAlchemyModelFactory):
+    """タスクモデルのファクトリ"""
+    class Meta:
+        model = Task
+        sqlalchemy_session_persistence = "commit"
+    
+    id = factory.LazyFunction(lambda: str(uuid.uuid4()))
+    title = factory.Faker('sentence', nb_words=5)
+    description = factory.Faker('paragraph')
+    created_by = factory.SubFactory(UserFactory)
+    due_date = factory.LazyFunction(lambda: datetime.utcnow() + timedelta(days=7))
+    status = factory.Iterator(['todo', 'in_progress', 'done'])
+    priority = factory.Iterator(['low', 'medium', 'high'])
+    created_at = factory.LazyFunction(datetime.utcnow)
+    updated_at = factory.LazyFunction(datetime.utcnow)
+
+# 使用例
+# tests/api/test_tasks.py
+def test_get_tasks(client, db_session):
+    """タスク一覧取得APIのテスト（ファクトリ使用）"""
+    # テストユーザー作成
+    user = UserFactory(db_session=db_session)
+    
+    # テストユーザーのタスクを5つ作成
+    tasks = TaskFactory.create_batch(
+        size=5,
+        created_by=user,
+        db_session=db_session
+    )
+    
+    # ログイン
+    response = client.post("/api/v1/auth/login", data={
+        "username": user.email,
+        "password": "password"  # 実際はテスト用パスワードを設定
+    })
+    token = response.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+    
+    # タスク一覧を取得
+    response = client.get("/api/v1/tasks/", headers=headers)
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 5  # 作成したタスク数と一致することを確認
+```
+
+## 8. テストの実行と管理
+
+### 8.1 テストコマンド
+
+```bash
+# 全テスト実行
+pytest
+
+# 特定のテストモジュール実行
+pytest tests/api/test_users.py
+
+# 特定の関数を実行
+pytest tests/api/test_users.py::test_create_user_api
+
+# カバレッジレポート作成
+pytest --cov=app --cov-report=html
+
+# E2Eテストのみ実行
+pytest -m e2e
+
+# 遅いテストをスキップ
+pytest -k "not slow"
+```
+
+### 8.2 pytest.iniの設定
+
+```ini
+[pytest]
+pythonpath = .
+testpaths = tests
+markers =
+    slow: marks tests as slow
+    e2e: marks tests as end-to-end tests
+    api: marks tests related to API endpoints
+    db: marks tests for database operations
+    unit: marks unit tests
+addopts = --strict-markers -v
+```
+
+### 8.3 CIでの自動テスト実行
+
+```yaml
+# .github/workflows/test.yml 
+name: バックエンドテスト
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'backend/**'
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - 'backend/**'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:13
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: test_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+          
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+      - name: Install dependencies
+        run: |
+          cd backend
+          pip install -r requirements.txt
+          pip install pytest pytest-cov
+      - name: Run tests
+        run: |
+          cd backend
+          pytest --cov=app --cov-report=xml
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
+          SECRET_KEY: test_secret_key
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          file: ./backend/coverage.xml
+          flags: backend
+```
+
+## 9. テストのベストプラクティス
+
+### 9.1 テスト設計の原則
+- テストピラミッドに従ってテストを分散
+- 最も重要なビジネスロジックの優先的テスト
+- 変更頻度の高いコードの重点的テスト
+- 境界条件のテスト（エッジケース）
+
+### 9.2 テストの保守性
+- DRYではなくDAMP (Descriptive And Meaningful Phrases) を重視
+- 目的が明確なテスト（何をテストしているか明示的に）
+- 適切なセットアップ、クリーンアップの実施
+- 共通ロジックはフィクスチャやヘルパーに抽出
+
+### 9.3 テストの信頼性
+- フラキーテスト（不安定なテスト）を排除
+- 環境依存を最小化
+- モックの過剰使用を避ける
+- テスト間の依存関係を排除
+
+### 9.4 チーム文化
+- TDD（テスト駆動開発）や BDD（振る舞い駆動開発）の適用
+- PRには必ずテストを含める
+- カバレッジ目標の設定とモニタリング
+- テスト品質のレビュー

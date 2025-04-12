@@ -1,0 +1,266 @@
+---
+description: Styling Design Principles and Implementation Guidelines Using Tailwind CSS in MapStack
+globs: 
+alwaysApply: false
+---
+---
+title: スタイリング（Tailwind CSS）規約
+description: MapStackにおけるTailwind CSSを使用したスタイリングの設計原則と実装規約
+category: frontend
+importance: high
+last_updated: 2025-04-13
+---
+
+# スタイリング（Tailwind CSS）規約
+
+## 1. 基本原則
+
+### 1.1 クラス名の順序
+クラス名は以下の優先順位で記述する：
+
+1. レイアウト・表示
+   - `flex`, `grid`, `block`, `hidden`
+   - `relative`, `absolute`, `fixed`
+   - `z-*`
+
+2. 位置・サイズ
+   - `w-*`, `h-*`
+   - `m-*`, `p-*`
+   - `top-*`, `right-*`, `bottom-*`, `left-*`
+
+3. 背景・境界線
+   - `bg-*`
+   - `border-*`
+   - `rounded-*`
+
+4. タイポグラフィ
+   - `text-*`
+   - `font-*`
+   - `leading-*`
+
+5. その他
+   - `opacity-*`
+   - `shadow-*`
+   - `transition-*`
+
+```tsx
+// 良い例
+<div className="flex relative w-full h-12 p-4 bg-white border rounded-lg text-lg font-medium shadow-md transition-all">
+  {/* コンテンツ */}
+</div>
+
+// 悪い例（順序がバラバラ）
+<div className="text-lg shadow-md flex p-4 rounded-lg relative w-full h-12 bg-white border font-medium transition-all">
+  {/* コンテンツ */}
+</div>
+```
+
+### 1.2 クラスのグループ化
+関連するクラスはグループ化して記述する：
+
+```tsx
+// 良い例
+<div className="
+  flex items-center justify-between
+  w-full h-12
+  p-4
+  bg-white border rounded-lg
+  text-lg font-medium
+  shadow-md transition-all
+">
+  {/* コンテンツ */}
+</div>
+```
+
+## 2. コンポーネント設計
+
+### 2.1 再利用可能なスタイル
+複雑なスタイルは`@apply`でコンポーネント化する：
+
+```css
+/* styles/components.css */
+.btn-primary {
+  @apply
+    flex items-center justify-center
+    px-4 py-2
+    bg-blue-500 text-white
+    rounded-lg
+    hover:bg-blue-600
+    transition-colors;
+}
+
+.card {
+  @apply
+    p-6
+    bg-white rounded-lg
+    shadow-md
+    transition-all;
+}
+```
+
+### 2.2 バリアントの管理
+コンポーネントのバリアントは`cva`を使用して管理する：
+
+```tsx
+import { cva } from 'class-variance-authority'
+
+const buttonVariants = cva(
+  'flex items-center justify-center rounded-lg transition-colors',
+  {
+    variants: {
+      variant: {
+        primary: 'bg-blue-500 text-white hover:bg-blue-600',
+        secondary: 'bg-gray-200 text-gray-800 hover:bg-gray-300',
+        outline: 'border border-gray-300 hover:bg-gray-50',
+      },
+      size: {
+        sm: 'px-3 py-1.5 text-sm',
+        md: 'px-4 py-2 text-base',
+        lg: 'px-6 py-3 text-lg',
+      },
+    },
+    defaultVariants: {
+      variant: 'primary',
+      size: 'md',
+    },
+  }
+)
+```
+
+## 3. レスポンシブデザイン
+
+### 3.1 ブレークポイントの使用
+Tailwindのデフォルトブレークポイントを使用：
+
+```tsx
+// モバイルファースト
+<div className="
+  w-full
+  md:w-1/2
+  lg:w-1/3
+  xl:w-1/4
+">
+  {/* コンテンツ */}
+</div>
+```
+
+### 3.2 コンテナークエリ
+コンテナークエリを使用してコンポーネントのレスポンシブ対応：
+
+```tsx
+<div className="@container">
+  <div className="@sm:flex @md:grid @lg:block">
+    {/* コンテンツ */}
+  </div>
+</div>
+```
+
+## 4. ダークモード
+
+### 4.1 ダークモードの実装
+`dark:`プレフィックスを使用して一貫したダークモード対応：
+
+```tsx
+<div className="
+  bg-white text-gray-900
+  dark:bg-gray-900 dark:text-white
+">
+  {/* コンテンツ */}
+</div>
+```
+
+### 4.2 カスタムカラーパレット
+テーマカラーは`tailwind.config.js`で定義：
+
+```js
+// tailwind.config.js
+module.exports = {
+  theme: {
+    extend: {
+      colors: {
+        primary: {
+          50: '#f0f9ff',
+          100: '#e0f2fe',
+          // ...
+          900: '#0c4a6e',
+        },
+      },
+    },
+  },
+}
+```
+
+## 5. アニメーション
+
+### 5.1 トランジション
+適切なトランジションを設定：
+
+```tsx
+<button className="
+  transition-all duration-200 ease-in-out
+  hover:scale-105
+  active:scale-95
+">
+  {/* コンテンツ */}
+</button>
+```
+
+### 5.2 カスタムアニメーション
+`tailwind.config.js`でカスタムアニメーションを定義：
+
+```js
+// tailwind.config.js
+module.exports = {
+  theme: {
+    extend: {
+      keyframes: {
+        'fade-in': {
+          '0%': { opacity: '0' },
+          '100%': { opacity: '1' },
+        },
+      },
+      animation: {
+        'fade-in': 'fade-in 0.5s ease-out',
+      },
+    },
+  },
+}
+```
+
+## 6. ユーティリティ
+
+### 6.1 共通スタイルの抽出
+共通のスタイルパターンはユーティリティとして抽出：
+
+```tsx
+// utils/styles.ts
+export const commonStyles = {
+  card: 'p-6 bg-white rounded-lg shadow-md',
+  button: 'px-4 py-2 rounded-lg transition-colors',
+  input: 'w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500',
+}
+```
+
+### 6.2 条件付きスタイル
+条件付きスタイルは`clsx`や`classnames`を使用：
+
+```tsx
+import { clsx } from 'clsx'
+
+const Button = ({ variant, size, disabled }) => {
+  return (
+    <button
+      className={clsx(
+        'flex items-center justify-center rounded-lg transition-colors',
+        {
+          'bg-blue-500 text-white hover:bg-blue-600': variant === 'primary',
+          'bg-gray-200 text-gray-800 hover:bg-gray-300': variant === 'secondary',
+          'opacity-50 cursor-not-allowed': disabled,
+        }
+      )}
+    >
+      {/* コンテンツ */}
+    </button>
+  )
+}
+```

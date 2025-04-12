@@ -1,0 +1,345 @@
+---
+description: API Endpoint Design and Implementation Guidelines Using FastAPI in MapStack
+globs: 
+alwaysApply: false
+---
+---
+title: FastAPI実装規約
+description: MapStackにおけるFastAPIを使用したAPIエンドポイント設計と実装規約
+category: backend
+importance: high
+last_updated: 2025-04-13
+---
+
+# FastAPI実装規約
+
+## 1. 基本原則
+
+### 1.1 エンドポイント設計
+- RESTful設計原則に従う
+- リソース名は複数形で記述
+- URL階層は浅く保つ
+- HTTPメソッドを目的に合わせて適切に使用する
+
+```
+GET /users              # ユーザー一覧の取得
+GET /users/{user_id}    # 特定ユーザーの取得
+POST /users             # 新規ユーザーの作成
+PATCH /users/{user_id}  # ユーザー情報の部分更新
+DELETE /users/{user_id} # ユーザーの削除
+```
+
+### 1.2 ルーティング構成
+```python
+# APIルーターの基本構成
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
+
+from app.core.deps import get_db, get_current_user
+from app.services import user_service
+from app.schemas.user import UserResponse, UserCreate, UserUpdate
+
+router = APIRouter(prefix="/users", tags=["users"])
+
+@router.get("/", response_model=list[UserResponse])
+async def get_users(
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """ユーザー一覧を取得する"""
+    return user_service.get_users(db, skip=skip, limit=limit)
+```
+
+## 2. スキーマ設計
+
+### 2.1 入出力スキーマの分離
+- 入力用と出力用のスキーマを明確に分離
+- 共通フィールドは基底クラスで定義
+- IDや作成日時などは出力スキーマにのみ含める
+
+```python
+# schemas/user.py
+from pydantic import BaseModel, EmailStr, Field
+from datetime import datetime
+from typing import Optional
+
+# 基底スキーマ
+class UserBase(BaseModel):
+    email: EmailStr
+    name: str
+    is_active: bool = True
+
+# 入力用スキーマ
+class UserCreate(UserBase):
+    password: str
+
+class UserUpdate(BaseModel):
+    email: Optional[EmailStr] = None
+    name: Optional[str] = None
+    is_active: Optional[bool] = None
+    password: Optional[str] = None
+
+# 出力用スキーマ
+class UserResponse(UserBase):
+    id: str
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        orm_mode = True
+```
+
+### 2.2 バリデーション
+```python
+from pydantic import BaseModel, EmailStr, Field, validator
+import re
+
+class UserCreate(BaseModel):
+    email: EmailStr
+    name: str = Field(..., min_length=2, max_length=50)
+    password: str = Field(..., min_length=8)
+    
+    @validator('password')
+    def password_strength(cls, v):
+        if not re.search(r'[A-Z]', v):
+            raise ValueError('パスワードは少なくとも1つの大文字を含む必要があります')
+        if not re.search(r'[a-z]', v):
+            raise ValueError('パスワードは少なくとも1つの小文字を含む必要があります')
+        if not re.search(r'[0-9]', v):
+            raise ValueError('パスワードは少なくとも1つの数字を含む必要があります')
+        return v
+```
+
+## 3. 依存性注入
+
+### 3.1 データベース接続
+```python
+# core/deps.py
+from typing import Generator
+from sqlalchemy.orm import Session
+from app.db.session import SessionLocal
+
+def get_db() -> Generator[Session, None, None]:
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+```
+
+### 3.2 認証と認可
+```python
+# core/deps.py
+from fastapi import Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordBearer
+from jose import jwt, JWTError
+from app.core.config import settings
+from app.services import user_service
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/token")
+
+def get_current_user(
+    db: Session = Depends(get_db),
+    token: str = Depends(oauth2_scheme)
+) -> User:
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="認証情報が無効です",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = jwt.decode(
+            token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
+        )
+        user_id: str = payload.get("sub")
+        if user_id is None:
+            raise credentials_exception
+    except JWTError:
+        raise credentials_exception
+    
+    user = user_service.get_user_by_id(db, user_id=user_id)
+    if user is None:
+        raise credentials_exception
+    return user
+
+def get_current_active_user(
+    current_user: User = Depends(get_current_user),
+) -> User:
+    if not current_user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="アカウントが無効化されています",
+        )
+    return current_user
+
+def get_current_admin_user(
+    current_user: User = Depends(get_current_active_user),
+) -> User:
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="管理者権限が必要です",
+        )
+    return current_user
+```
+
+## 4. エラーハンドリング
+
+### 4.1 標準的なエラーレスポンス
+```python
+# 標準的なHTTPエラー
+from fastapi import HTTPException, status
+
+# リソースが見つからない場合
+raise HTTPException(
+    status_code=status.HTTP_404_NOT_FOUND,
+    detail="指定されたユーザーが見つかりません"
+)
+
+# バリデーションエラー
+raise HTTPException(
+    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+    detail="無効なフォーマットまたはパラメータです"
+)
+
+# 権限エラー
+raise HTTPException(
+    status_code=status.HTTP_403_FORBIDDEN,
+    detail="この操作を実行する権限がありません"
+)
+```
+
+### 4.2 カスタムエラーハンドラ
+```python
+# middleware/error_handlers.py
+from fastapi import Request, status
+from fastapi.responses import JSONResponse
+from sqlalchemy.exc import IntegrityError
+from app.core.exceptions import AppException
+
+async def integrity_error_handler(request: Request, exc: IntegrityError):
+    return JSONResponse(
+        status_code=status.HTTP_409_CONFLICT,
+        content={
+            "detail": "データの整合性エラーが発生しました。他のリソースと競合している可能性があります。"
+        }
+    )
+
+async def app_exception_handler(request: Request, exc: AppException):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail, "code": exc.code}
+    )
+
+# main.py での登録
+app.add_exception_handler(IntegrityError, integrity_error_handler)
+app.add_exception_handler(AppException, app_exception_handler)
+```
+
+## 5. パフォーマンス最適化
+
+### 5.1 クエリパラメータ
+```python
+@router.get("/", response_model=list[UserResponse])
+async def get_users(
+    skip: int = 0,
+    limit: int = 100,
+    sort_by: str = "created_at",
+    order: str = "desc",
+    search: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    """
+    ユーザー一覧を取得する
+    - **skip**: オフセット（デフォルト: 0）
+    - **limit**: 取得件数（デフォルト: 100、最大: 100）
+    - **sort_by**: ソートフィールド（デフォルト: created_at）
+    - **order**: ソート順（asc または desc、デフォルト: desc）
+    - **search**: 検索キーワード
+    """
+    # limitに上限を設ける
+    if limit > 100:
+        limit = 100
+        
+    return user_service.get_users(
+        db, 
+        skip=skip, 
+        limit=limit,
+        sort_by=sort_by,
+        order=order,
+        search=search
+    )
+```
+
+### 5.2 N+1問題の回避
+```python
+# services/user_service.py
+def get_users_with_activities(db: Session, skip: int = 0, limit: int = 100):
+    # joinedloadを使用して関連データを一度に取得
+    return db.query(User).\
+        options(joinedload(User.activities)).\
+        offset(skip).\
+        limit(limit).\
+        all()
+```
+
+## 6. セキュリティ
+
+### 6.1 入力検証
+- すべての入力パラメータにバリデーションを適用
+- SQLインジェクションやXSSを防止するパラメータ検証
+- ファイルアップロードの厳格なバリデーション
+
+### 6.2 認証と認可
+```python
+# APIエンドポイントの権限制御
+@router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_user(
+    user_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_admin_user)  # 管理者のみ
+):
+    """ユーザーを削除する（管理者のみ）"""
+    user = user_service.get_user_by_id(db, user_id)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="指定されたユーザーが見つかりません"
+        )
+    
+    user_service.delete_user(db, user_id)
+    return None
+```
+
+## 7. APIドキュメント
+
+### 7.1 OpenAPI仕様
+- 各エンドポイントに適切な説明を追加
+- リクエスト/レスポンスの例を提供
+- タグでエンドポイントをグループ化
+
+```python
+@router.post("/", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+async def create_user(
+    user_data: UserCreate,
+    db: Session = Depends(get_db)
+):
+    """
+    新規ユーザーを作成する
+    
+    - **email**: 有効なメールアドレス
+    - **name**: ユーザー名（2文字以上、50文字以内）
+    - **password**: パスワード（8文字以上、大小文字と数字を含む）
+    """
+    # 既存ユーザーのチェック
+    existing_user = user_service.get_user_by_email(db, email=user_data.email)
+    if existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="このメールアドレスは既に登録されています"
+        )
+    
+    return user_service.create_user(db, user_data)
+```

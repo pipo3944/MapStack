@@ -1,0 +1,97 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+---
+title: 基本開発ワークフロー
+description: MapStackプロジェクトでの基本的な開発ワークフローと手順
+category: common
+importance: high
+last_updated: 2025-04-13
+---
+
+## 開発ワークフローの基本原則
+
+MapStackプロジェクトでは、以下の基本原則に従って開発を進めてください：
+
+1. **必ずREADMEを最初に読む** - 開発を始める前に、最新のREADME.mdを必ず参照してください
+2. **モノレポ構造を理解する** - フロントエンド、バックエンド、インフラが単一リポジトリで管理されています
+3. **Docker環境を活用する** - バックエンドとデータベースはDockerで一元管理されています
+4. **統一された開発コマンドを使用する** - ルートのpackage.jsonに定義されたスクリプトを使用してください
+
+## 開発の流れ
+
+1. **環境セットアップ**
+   ```bash
+   # リポジトリのクローン
+   git clone https://github.com/mapstack/mapstack.git
+   cd mapstack
+   
+   # フロントエンド依存関係のインストール
+   npm run install:frontend
+   
+   # Docker環境の起動
+   npm run docker:build
+   npm run docker:up
+   ```
+
+2. **開発サーバーの起動**
+   ```bash
+   npm run dev  # フロントエンド + バックエンド + DB
+   ```
+
+3. **ブランチ作成とコード変更**
+   ```bash
+   git checkout -b feature/your-feature-name
+   
+   # コード変更...
+   
+   # 変更の確認
+   npm run lint
+   npm run test
+   ```
+
+4. **コミットとプッシュ**
+   ```bash
+   git add .
+   git commit -m "feat: 機能の説明"
+   git push origin feature/your-feature-name
+   ```
+
+5. **プルリクエスト作成**
+   - GitHubでプルリクエストを作成
+   - レビュー依頼
+   - CI/CDパイプラインが自動実行されることを確認
+
+## コーディング規約
+
+- [common/code_style](../common/code_style.md) および [common/naming](../common/naming.md) に記載された規約に従ってください
+- フロントエンドコードはTypeScriptで記述し、適切な型付けを行ってください
+- バックエンドコードはPythonの型ヒントを活用し、Pydanticでデータ検証を行ってください
+- コメントは最小限に抑え、自己説明的なコードを心がけてください
+
+## テスト方針
+
+- 新機能には必ず対応するテストを書いてください
+- フロントエンドはReact Testing Libraryでコンポーネントテストを実施
+- バックエンドはpytestでユニットテストおよび統合テストを実施
+- E2Eテストは重要なユーザーフローに対してのみ実施
+
+## トラブルシューティング
+
+問題が発生した場合は、以下の手順で対応してください：
+
+1. READMEとmonorepo_setup.mdのトラブルシューティングセクションを確認
+2. Docker関連の問題は、ログを確認し、必要に応じてコンテナを再ビルド
+   ```bash
+   npm run docker:logs
+   npm run docker:down
+   docker-compose build --no-cache
+   npm run docker:up
+   ```
+3. それでも解決しない場合は、チームのコミュニケーションチャンネルで質問する
+
+---
+
+*このワークフローは、MapStackプロジェクトのすべての開発者に適用されます。プロジェクトの進行に伴い定期的に更新されます。*

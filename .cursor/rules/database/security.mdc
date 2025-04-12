@@ -1,0 +1,364 @@
+---
+description: Database Security Measures and Protection Techniques in MapStack
+globs: 
+alwaysApply: false
+---
+---
+title: データベースセキュリティガイドライン
+description: MapStackにおけるデータベースのセキュリティ対策と保護手法
+category: database
+importance: high
+last_updated: 2025-04-13
+---
+
+# データベースセキュリティガイドライン
+
+## 1. 基本的なセキュリティ原則
+
+### 1.1 防御の多層化
+- 単一の防御層に依存せず、複数の保護層を実装
+- セキュリティは開発プロセスの最初から考慮
+- 定期的なセキュリティ評価と改善
+- セキュリティインシデント対応手順の準備
+
+### 1.2 最小権限の原則
+- サービスアカウントとユーザーには必要最小限の権限のみを付与
+- デフォルトでの権限拒否と明示的な許可
+- 権限は定期的に監査し、不要な権限は削除
+- 一時的に付与した権限は期限付きで管理
+
+## 2. データベースアクセス制御
+
+### 2.1 認証メカニズム
+- 強力なパスワードポリシーの適用
+- パスワード認証に加えてクライアント証明書の使用
+- 外部IDプロバイダとの統合（LDAP/Active Directory）
+- 多要素認証の実装（可能な場合）
+
+### 2.2 ロールベースのアクセス制御（RBAC）
+PostgreSQLのロールシステムを活用したアクセス制御：
+
+```sql
+-- アプリケーション用の読み取り専用ロール
+CREATE ROLE app_readonly;
+GRANT CONNECT ON DATABASE mapstack TO app_readonly;
+GRANT USAGE ON SCHEMA public TO app_readonly;
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO app_readonly;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO app_readonly;
+
+-- アプリケーション用の読み書きロール
+CREATE ROLE app_readwrite;
+GRANT CONNECT ON DATABASE mapstack TO app_readwrite;
+GRANT USAGE ON SCHEMA public TO app_readwrite;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO app_readwrite;
+GRANT USAGE ON ALL SEQUENCES IN SCHEMA public TO app_readwrite;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO app_readwrite;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE ON SEQUENCES TO app_readwrite;
+
+-- 特定テーブルの制限
+REVOKE ALL ON TABLE user_sensitive_data FROM app_readwrite;
+GRANT SELECT, INSERT ON TABLE user_sensitive_data TO app_readwrite;
+```
+
+### 2.3 行レベルセキュリティ（RLS）
+テーブル内の行へのアクセスを制限：
+
+```sql
+-- ユーザーは自分のデータのみにアクセス可能
+CREATE POLICY user_isolation ON user_data
+    USING (user_id = current_user_id());
+    
+-- 管理者は全てのデータにアクセス可能
+CREATE POLICY admin_access ON user_data
+    USING (pg_has_role(current_user, 'admin', 'member'));
+    
+-- ポリシーを有効化
+ALTER TABLE user_data ENABLE ROW LEVEL SECURITY;
+```
+
+### 2.4 アプリケーションレベルのセキュリティ
+- ORM（Object-Relational Mapping）を通じた一貫したアクセス制御
+- アプリケーションロールと権限の管理
+- テナント分離のためのマルチテナンシー設計
+- 認可チェックの一元化
+
+```python
+# SQLAlchemyでのRBACの例
+def get_user_data(db_session, user_id, current_user):
+    """現在のユーザーに基づいてデータアクセスを制御"""
+    if current_user.is_admin or current_user.id == user_id:
+        return db_session.query(UserData).filter(UserData.user_id == user_id).all()
+    else:
+        # 権限がない場合は403エラーを発生させる
+        raise HTTPException(
+            status_code=403,
+            detail="アクセス権限がありません"
+        )
+```
+
+## 3. SQL インジェクション対策
+
+### 3.1 パラメータ化クエリの使用
+直接のSQL文字列結合は避け、必ずパラメータ化クエリを使用：
+
+```python
+# 悪い例 - インジェクションの危険性
+query = f"SELECT * FROM users WHERE username = '{username}'"
+
+# 良い例 - パラメータ化クエリ
+query = "SELECT * FROM users WHERE username = %s"
+cursor.execute(query, [username])
+
+# SQLAlchemyでの例
+db.session.query(User).filter(User.username == username).all()
+```
+
+### 3.2 ORMの活用
+- SQLAlchemyなどのORMを使用してSQLインジェクションを防止
+- 生のSQLは必要な場合のみテストとレビューを徹底して使用
+- ストアドプロシージャを使用して安全なAPIを提供
+
+### 3.3 入力検証とサニタイズ
+- ユーザー入力はバックエンドで必ず検証
+- 特に動的SQLの一部として使用される入力は厳格にチェック
+- ホワイトリストアプローチの採用（許可リストのみ受け入れ）
+
+### 3.4 エラーメッセージの制限
+- ユーザーに表示するエラーメッセージには詳細なDBエラーを含めない
+- アプリケーション固有のエラーコードを使用
+- 詳細なログはセキュアなログシステムにのみ記録
+
+## 4. 暗号化と機密データ保護
+
+### 4.1 保管データの暗号化
+- 機密データは常に暗号化して保存
+- カラムレベルの暗号化とテーブルレベルの暗号化の適切な選択
+- 暗号鍵の安全な管理（キーローテーション、分離保管）
+
+```sql
+-- pgcryptoを使用した暗号化の例
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+-- データ挿入時の暗号化
+INSERT INTO sensitive_data (id, encrypted_data)
+VALUES (
+    1, 
+    pgp_sym_encrypt('機密情報', 'AES_KEY')
+);
+
+-- データ取得時の復号化
+SELECT id, pgp_sym_decrypt(encrypted_data, 'AES_KEY') AS decrypted_data 
+FROM sensitive_data;
+```
+
+### 4.2 トランスポート層の暗号化
+- データベース接続は常にSSL/TLSを使用
+- 強力な暗号スイートと最新のプロトコルバージョンを強制
+- 無効な証明書を許可しない設定
+
+```
+# postgresql.conf の設定例
+ssl = on
+ssl_cert_file = 'server.crt'
+ssl_key_file = 'server.key'
+ssl_ciphers = 'HIGH:!aNULL:!MD5'
+```
+
+### 4.3 アプリケーションレベルの暗号化
+- 機密性の高いデータのエンドツーエンド暗号化
+- パスワードはbcryptやArgon2などの強力なハッシュ関数で保存
+- 個人識別情報（PII）の仮名化または匿名化
+
+```python
+# パスワードハッシュの例（Python/FastAPI）
+from passlib.context import CryptContext
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+def get_password_hash(password: str) -> str:
+    """パスワードをハッシュ化"""
+    return pwd_context.hash(password)
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """パスワードの検証"""
+    return pwd_context.verify(plain_password, hashed_password)
+```
+
+## 5. 監査とログ管理
+
+### 5.1 データベース監査
+- セキュリティ関連アクションの包括的な監査ログを保持
+- 特に機密データへのアクセスとスキーマ変更を記録
+- 誰が何をいつ変更したかを追跡
+
+```sql
+-- PostgreSQL監査拡張の有効化
+CREATE EXTENSION pgaudit;
+
+-- 監査設定の例
+ALTER SYSTEM SET pgaudit.log = 'write, ddl';
+ALTER SYSTEM SET pgaudit.log_catalog = off;
+ALTER SYSTEM SET pgaudit.log_parameter = on;
+ALTER SYSTEM SET pgaudit.log_relation = on;
+```
+
+### 5.2 アプリケーションレベルの監査
+- 重要な操作に対するアプリケーションログの記録
+- ユーザーアクションの完全な監査証跡の維持
+- 監査ログの改ざん防止
+
+```python
+# 監査ログの例（Python/FastAPI）
+def audit_log(db: Session, user_id: str, action: str, resource_type: str, resource_id: str, details: Dict = None):
+    """監査ログを記録する"""
+    log_entry = AuditLog(
+        user_id=user_id,
+        action=action,
+        resource_type=resource_type,
+        resource_id=resource_id,
+        details=json.dumps(details) if details else None,
+        ip_address=request.client.host,
+        user_agent=request.headers.get("user-agent"),
+        timestamp=datetime.utcnow()
+    )
+    db.add(log_entry)
+    db.commit()
+```
+
+### 5.3 ログの保護と保持
+- 監査ログは改ざん防止のため分離された場所に保存
+- ログの保持期間はコンプライアンス要件に従って設定
+- 機密情報はログに記録しない、またはマスクする
+- ログの定期的なバックアップとアーカイブ
+
+## 6. バックアップと障害復旧
+
+### 6.1 バックアップ戦略
+- 定期的な完全バックアップと増分バックアップの組み合わせ
+- バックアップデータの暗号化
+- オフサイトバックアップとオンサイトバックアップの併用
+- 保持期間の明確な定義（例：日次7日分、週次4週分、月次12ヶ月分）
+
+### 6.2 リカバリテスト
+- バックアップからの復元テストを定期的に実施
+- 複数のシナリオに基づいた災害復旧訓練
+- 復元手順のドキュメント化と更新
+
+### 6.3 高可用性の確保
+- レプリケーションを使用したスタンバイサーバーの維持
+- 自動フェイルオーバーメカニズムの実装
+- 障害監視と自動通知システム
+
+```
+# postgresql.conf のレプリケーション設定例
+wal_level = replica  # または 'logical'
+max_wal_senders = 10
+wal_keep_segments = 64
+```
+
+## 7. 脆弱性管理と監視
+
+### 7.1 データベースの脆弱性スキャン
+- 定期的なセキュリティ脆弱性スキャンの実施
+- パッチとアップデートの迅速な適用
+- サポート終了バージョンからの移行計画
+
+### 7.2 異常検知と監視
+- 異常なクエリパターンやアクセスパターンの検出
+- 大量データ抽出や大量アクセスの監視
+- セキュリティインシデントの早期警告システム
+
+```sql
+-- 大量クエリを検出するモニタリングクエリの例
+SELECT 
+    usename, 
+    client_addr, 
+    count(*) as active_connections
+FROM 
+    pg_stat_activity
+GROUP BY 
+    usename, client_addr
+HAVING 
+    count(*) > 50;
+```
+
+### 7.3 APIセキュリティの強化
+- レート制限の実装によるブルートフォース攻撃の防止
+- APIキーのローテーションと有効期限の管理
+- 権限のない操作に対する強固なブロック
+
+```python
+# FastAPIでのレート制限の例
+from fastapi import Depends, HTTPException
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+
+limiter = Limiter(key_func=get_remote_address)
+
+@app.get("/api/sensitive-data")
+@limiter.limit("5/minute")
+async def get_sensitive_data(request: Request, current_user = Depends(get_current_user)):
+    # レート制限が自動的に適用されます
+    # ...
+```
+
+## 8. 環境分離とテナント分離
+
+### 8.1 環境の分離
+- 本番、ステージング、開発、テスト環境の完全分離
+- 環境間でのデータフローの厳格な管理
+- 本番データの非本番環境への使用制限（データのマスキングまたは匿名化）
+
+### 8.2 マルチテナンシー戦略
+- テナントデータの適切な分離
+- スキーマ分離またはテーブル分離の選択
+- クロステナントクエリの制限と監視
+
+```sql
+-- スキーマベースのマルチテナンシーの例
+-- テナントごとのスキーマ作成
+CREATE SCHEMA tenant_123;
+
+-- テナントスキーマの権限設定
+GRANT USAGE ON SCHEMA tenant_123 TO app_user;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA tenant_123 TO app_user;
+```
+
+## 9. セキュリティのベストプラクティス
+
+1. **設計段階からのセキュリティ組み込み**:
+   - セキュリティはプロジェクト初期から考慮
+   - セキュアバイデザインの原則に従う
+   - 脅威モデリングを実施してリスクを特定
+
+2. **定期的なセキュリティレビュー**:
+   - コードレビューにセキュリティの観点を含める
+   - 第三者による定期的なセキュリティ評価
+   - 自動化されたセキュリティスキャンの実装
+
+3. **開発者セキュリティトレーニング**:
+   - チーム全体へのセキュリティ意識向上トレーニング
+   - 一般的なデータベースセキュリティ脆弱性の教育
+   - セキュアコーディングプラクティスの共有
+
+4. **インシデント対応計画**:
+   - セキュリティインシデント発生時の対応手順書
+   - 責任範囲と連絡先リストの整備
+   - 定期的なインシデント対応訓練
+
+## 10. コンプライアンス対応
+
+### 10.1 データプライバシー法規制
+- GDPR、CCPA、個人情報保護法などの要件への対応
+- データ主体の権利（アクセス権、消去権など）の実装
+- プライバシーバイデザイン原則の適用
+
+### 10.2 データ分類と取り扱い
+- データの機密性レベルに基づく分類
+- 各分類に応じた保護メカニズムの適用
+- データライフサイクル管理の実装
+
+### 10.3 内部統制とコンプライアンス監査
+- アクセス権の定期的なレビューと証跡の保持
+- 責任の分離と相互チェック機構
+- コンプライアンス監査への対応準備

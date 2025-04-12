@@ -1,0 +1,570 @@
+---
+description: Project Structure and Design Principles in MapStack
+globs: 
+alwaysApply: false
+---
+---
+title: プロジェクト構造とアーキテクチャ
+description: MapStackにおけるプロジェクト構成と設計原則
+category: common
+importance: high
+last_updated: 2025-04-13
+---
+
+# プロジェクト構造とアーキテクチャ
+
+## 1. 全体アーキテクチャ
+
+### 1.1 アーキテクチャ概要
+MapStackは以下の主要コンポーネントで構成されています：
+
+- **フロントエンド**: React + TypeScript + Next.js
+- **バックエンド**: FastAPI + Python
+- **データベース**: PostgreSQL
+- **キャッシュ**: Redis
+- **認証**: JWT + OAuth2.0
+- **デプロイ**: Docker + Kubernetes
+
+### 1.2 アーキテクチャ図
+
+```mermaid
+graph LR
+    A[クライアント] <--> B[Next.js + API]
+    B <--> C[FastAPI]
+    C <--> D[(PostgreSQL)]
+```
+
+### 1.3 通信フロー
+1. クライアントからのリクエストはNext.jsで処理
+2. 静的コンテンツはNext.jsのSSR/SSGで処理
+3. データ操作はAPIエンドポイント経由でFastAPIへ送信
+4. FastAPIはビジネスロジックを実行しデータベースと通信
+5. キャッシュ可能なデータはRedisに保存
+
+## 2. フロントエンド構造
+
+### 2.1 ディレクトリ構造
+```
+frontend/
+├── public/             # 静的ファイル
+├── src/
+│   ├── components/     # 再利用可能なUIコンポーネント
+│   │   ├── common/     # 共通コンポーネント（ボタン、フォームなど）
+│   │   ├── layout/     # レイアウト関連コンポーネント
+│   │   └── features/   # 機能固有のコンポーネント
+│   ├── hooks/          # カスタムReact Hooks
+│   ├── pages/          # Next.jsのページコンポーネント
+│   ├── services/       # APIと通信するサービス
+│   ├── store/          # グローバル状態管理
+│   ├── styles/         # スタイル関連ファイル
+│   ├── types/          # TypeScript型定義
+│   └── utils/          # ユーティリティ関数
+├── .eslintrc.js        # ESLint設定
+├── .prettierrc         # Prettier設定
+├── next.config.js      # Next.js設定
+├── package.json        # 依存関係
+└── tsconfig.json       # TypeScript設定
+```
+
+### 2.2 コンポーネント設計原則
+1. **コンポーネントの分類**:
+   - **ページコンポーネント**: ルーティングに対応するコンポーネント
+   - **コンテナコンポーネント**: 状態管理とロジックを担当
+   - **プレゼンテーショナルコンポーネント**: UIのみを担当、props経由でデータ受取
+
+2. **コンポーネントの責務分離**:
+   - 単一責任の原則に従う
+   - コンポーネントは1つの明確な役割のみを持つ
+   - 複雑なコンポーネントは小さなコンポーネントに分割
+
+3. **コンポーネント命名規則**:
+   - 機能を表す明確な名前を使用
+   - プレフィックスを使用して種類を区別（例: `Button`、`UserForm`、`MapView`）
+   - コンテナコンポーネントには`Container`サフィックスを付ける
+
+### 2.3 状態管理
+1. **ローカル状態**: コンポーネント内の`useState`
+2. **共有状態**: React Context + useReducer
+3. **グローバル状態**: Redux ToolkitまたはZustand
+4. **サーバー状態**: React Query / SWR
+
+```tsx
+// グローバル状態の例（Zustand使用）
+import create from 'zustand';
+
+interface MapState {
+  center: [number, number];
+  zoom: number;
+  setCenter: (center: [number, number]) => void;
+  setZoom: (zoom: number) => void;
+}
+
+export const useMapStore = create<MapState>((set) => ({
+  center: [35.6895, 139.6917], // 東京
+  zoom: 12,
+  setCenter: (center) => set({ center }),
+  setZoom: (zoom) => set({ zoom }),
+}));
+```
+
+## 3. バックエンド構造
+
+### 3.1 ディレクトリ構造
+```
+backend/
+├── app/
+│   ├── api/            # APIエンドポイント
+│   │   ├── v1/         # APIバージョン1
+│   │   └── deps.py     # 依存関係
+│   ├── core/           # 中核設定と初期化
+│   │   ├── config.py   # 環境設定
+│   │   └── security.py # 認証・権限
+│   ├── db/             # データベース関連
+│   │   ├── models/     # SQLAlchemyモデル
+│   │   └── session.py  # DBセッション管理
+│   ├── schemas/        # Pydanticスキーマ
+│   ├── services/       # ビジネスロジック
+│   └── utils/          # ユーティリティ関数
+├── alembic/            # マイグレーション
+├── tests/              # テスト
+├── .flake8             # Flake8設定
+├── .pre-commit-config.yaml # pre-commit hooks
+├── pyproject.toml      # 依存関係と設定
+└── main.py             # アプリケーションエントリーポイント
+```
+
+### 3.2 レイヤードアーキテクチャ
+1. **API層**: リクエスト受付/レスポンス返却、入力検証
+2. **サービス層**: ビジネスロジック、トランザクション管理
+3. **リポジトリ層**: データアクセス、永続化
+4. **モデル層**: データ構造、ドメインロジック
+
+```python
+# API層の例
+@router.get("/users/{user_id}", response_model=schemas.User)
+def get_user(
+    user_id: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    # 認可チェック
+    if not current_user.is_admin and current_user.id != user_id:
+        raise HTTPException(status_code=403, detail="操作権限がありません")
+    
+    # サービス層呼び出し
+    user = user_service.get_user_by_id(db, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="ユーザーが見つかりません")
+    
+    return user
+```
+
+### 3.3 依存性注入
+FastAPIの`Depends()`を使用して依存関係を注入します：
+
+```python
+# 依存性注入の例
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+def get_current_user(
+    db: Session = Depends(get_db),
+    token: str = Depends(oauth2_scheme),
+) -> models.User:
+    user = authenticate_user(db, token)
+    if not user:
+        raise HTTPException(status_code=401, detail="認証に失敗しました")
+    return user
+```
+
+## 4. データベース設計
+
+### 4.1 基本原則
+- 正規化（主に第3正規形まで）
+- 適切なインデックス設定
+- 参照整合性の保持（外部キー制約）
+
+### 4.2 主要テーブル構造
+
+**users**
+```sql
+CREATE TABLE users (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    email VARCHAR(255) UNIQUE NOT NULL,
+    hashed_password VARCHAR(255) NOT NULL,
+    full_name VARCHAR(255) NOT NULL,
+    is_active BOOLEAN NOT NULL DEFAULT true,
+    is_admin BOOLEAN NOT NULL DEFAULT false,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+);
+```
+
+**locations**
+```sql
+CREATE TABLE locations (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name VARCHAR(255) NOT NULL,
+    description TEXT,
+    coordinates GEOMETRY(POINT, 4326) NOT NULL,
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+);
+CREATE INDEX locations_coordinates_idx ON locations USING GIST(coordinates);
+```
+
+### 4.3 マイグレーション戦略
+- Alembicを使用したマイグレーション管理
+- 前方互換性のある変更を心がける
+- 破壊的変更は段階的に適用
+
+```python
+# alembic/versions/xxxx_add_locations_table.py
+def upgrade():
+    op.create_table(
+        'locations',
+        sa.Column('id', sa.UUID(), server_default=sa.text('gen_random_uuid()'), nullable=False),
+        sa.Column('name', sa.String(length=255), nullable=False),
+        sa.Column('description', sa.Text(), nullable=True),
+        sa.Column('user_id', sa.UUID(), nullable=False),
+        sa.Column('created_at', sa.TIMESTAMP(timezone=True), server_default=sa.text('now()'), nullable=True),
+        sa.Column('updated_at', sa.TIMESTAMP(timezone=True), server_default=sa.text('now()'), nullable=True),
+        sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
+        sa.PrimaryKeyConstraint('id')
+    )
+    op.execute('ALTER TABLE locations ADD COLUMN coordinates GEOMETRY(POINT, 4326) NOT NULL')
+    op.create_index('locations_coordinates_idx', 'locations', ['coordinates'], unique=False, postgresql_using='gist')
+```
+
+## 5. API設計
+
+### 5.1 RESTful設計原則
+- リソース中心の設計
+- HTTPメソッドの適切な使用
+- 一貫したURL構造
+- 適切なHTTPステータスコード
+
+### 5.2 API構造
+| メソッド | エンドポイント           | 説明                         |
+|----------|--------------------------|------------------------------|
+| GET      | /api/v1/users            | ユーザー一覧取得             |
+| GET      | /api/v1/users/{id}       | 特定ユーザー取得             |
+| POST     | /api/v1/users            | 新規ユーザー作成             |
+| PUT      | /api/v1/users/{id}       | ユーザー情報更新             |
+| DELETE   | /api/v1/users/{id}       | ユーザー削除                 |
+
+### 5.3 レスポンス形式
+一貫したレスポンス形式を使用します：
+
+```json
+// 成功レスポンス
+{
+  "status": "success",
+  "data": { ... },
+  "meta": {
+    "pagination": {
+      "total": 100,
+      "page": 1,
+      "per_page": 10,
+      "total_pages": 10
+    }
+  }
+}
+
+// エラーレスポンス
+{
+  "status": "error",
+  "error": {
+    "code": "RESOURCE_NOT_FOUND",
+    "message": "指定されたリソースが見つかりません",
+    "details": { ... }
+  }
+}
+```
+
+## 6. 認証・認可
+
+### 6.1 認証方式
+- JWT (JSON Web Token)を使用
+- アクセストークンとリフレッシュトークン
+- OAuth2.0プロバイダ（Google, Githubなど）との連携
+
+```python
+# トークン生成関数の例
+def create_access_token(data: dict, expires_delta: timedelta = None):
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.utcnow() + timedelta(minutes=15)
+    to_encode.update({"exp": expire})
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+```
+
+### 6.2 認可モデル
+- ロールベースのアクセス制御（RBAC）
+- 主要ロール: 管理者、一般ユーザー、ゲスト
+- 各リソースタイプごとの権限定義
+
+```python
+# 権限チェックの例
+def check_permissions(user: models.User, resource: str, action: str) -> bool:
+    """
+    ユーザーが特定のリソースに対して操作権限を持っているか確認する
+    
+    Args:
+        user: ユーザーモデル
+        resource: リソースタイプ (例: "users", "locations")
+        action: 操作種別 (例: "read", "write", "delete")
+    
+    Returns:
+        bool: 操作が許可される場合はTrue
+    """
+    # 管理者は全ての操作が可能
+    if user.is_admin:
+        return True
+        
+    # ロールごとの権限マッピング
+    permissions = {
+        "user": {
+            "users": ["read"],
+            "locations": ["read", "write", "delete"],
+        },
+        "guest": {
+            "users": [],
+            "locations": ["read"],
+        }
+    }
+    
+    role = "user" if user.is_active else "guest"
+    return action in permissions.get(role, {}).get(resource, [])
+```
+
+## 7. エラー処理
+
+### 7.1 例外処理の原則
+- グローバル例外ハンドラーの使用
+- 意味のあるエラーメッセージ
+- 適切なHTTPステータスコード
+- セキュリティ上の配慮（詳細なエラーは内部でのみ）
+
+### 7.2 エラー種類
+| エラーコード | HTTPステータス | 説明                       |
+|--------------|----------------|----------------------------|
+| NOT_FOUND    | 404            | リソースが見つからない     |
+| UNAUTHORIZED | 401            | 認証が必要                 |
+| FORBIDDEN    | 403            | 権限がない                 |
+| BAD_REQUEST  | 400            | リクエスト形式が不正       |
+| VALIDATION   | 422            | 入力値が不正               |
+| CONFLICT     | 409            | リソースの競合             |
+| SERVER_ERROR | 500            | サーバー内部エラー         |
+
+### 7.3 実装例
+```python
+# グローバル例外ハンドラー
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request, exc):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "status": "error",
+            "error": {
+                "code": exc.headers.get("error_code", "HTTP_ERROR"),
+                "message": exc.detail,
+            }
+        }
+    )
+
+# カスタム例外クラス
+class ResourceNotFoundError(HTTPException):
+    def __init__(self, resource_type: str, resource_id: str):
+        super().__init__(
+            status_code=404,
+            detail=f"{resource_type} with id {resource_id} not found",
+            headers={"error_code": "RESOURCE_NOT_FOUND"}
+        )
+```
+
+## 8. テスト戦略
+
+### 8.1 テスト種類
+- 単体テスト: 個別関数・メソッドの検証
+- 統合テスト: コンポーネント間の相互作用検証
+- APIテスト: エンドポイントの検証
+- E2Eテスト: ユーザーフロー全体の検証
+
+### 8.2 テストスタック
+- フロントエンド: Jest + React Testing Library
+- バックエンド: pytest
+- E2E: Cypress
+
+### 8.3 テスト例
+```python
+# バックエンドテストの例
+def test_create_user(client, db):
+    response = client.post(
+        "/api/v1/users/",
+        json={
+            "email": "test@example.com",
+            "password": "password123",
+            "full_name": "Test User"
+        },
+    )
+    assert response.status_code == 201
+    data = response.json()
+    assert data["email"] == "test@example.com"
+    assert "id" in data
+    
+    # データベースに保存されたか確認
+    db_user = db.query(models.User).filter(models.User.email == "test@example.com").first()
+    assert db_user is not None
+    assert db_user.full_name == "Test User"
+```
+
+```tsx
+// フロントエンドテストの例
+import { render, screen, fireEvent } from '@testing-library/react';
+import { UserForm } from './UserForm';
+
+test('ユーザーフォームが正しく送信される', async () => {
+  const mockOnSubmit = jest.fn();
+  
+  render(<UserForm onSubmit={mockOnSubmit} />);
+  
+  // フォーム入力
+  fireEvent.change(screen.getByLabelText(/名前/i), {
+    target: { value: 'テストユーザー' },
+  });
+  
+  fireEvent.change(screen.getByLabelText(/メールアドレス/i), {
+    target: { value: 'test@example.com' },
+  });
+  
+  // フォーム送信
+  fireEvent.click(screen.getByText(/登録/i));
+  
+  // 送信関数が呼ばれたことを確認
+  expect(mockOnSubmit).toHaveBeenCalledWith({
+    name: 'テストユーザー',
+    email: 'test@example.com',
+  });
+});
+```
+
+## 9. セキュリティ対策
+
+### 9.1 一般的なセキュリティ対策
+- すべての入力値の検証
+- SQLインジェクション対策
+- XSS対策
+- CSRF対策
+- レート制限の実装
+- 適切なHTTPヘッダー設定
+
+### 9.2 認証セキュリティ
+- パスワードはbcryptでハッシュ化
+- 強力なパスワードポリシーの実施
+- JWTトークンは短期間で有効期限設定
+- トークンの安全な保存（HttpOnly Cookie）
+
+### 9.3 データ保護
+- 機密データの暗号化
+- PII（個人識別情報）の適切な取り扱い
+- データアクセスの監査ログ
+- バックアップと障害復旧計画
+
+## 10. デプロイメント
+
+### 10.1 環境構成
+- 開発環境（Development）
+- テスト環境（Staging）
+- 本番環境（Production）
+
+### 10.2 CI/CDパイプライン
+1. コードプッシュ
+2. 自動テスト実行
+3. Docker イメージのビルド
+4. イメージのプッシュとタグ付け
+5. Kubernetes でのデプロイ
+
+### 10.3 インフラストラクチャ
+- Kubernetes クラスター
+- コンテナレジストリ
+- ロードバランサー
+- モニタリングとロギング
+- バックアップサービス
+
+```yaml
+# Kubernetes デプロイメント例
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mapstack-backend
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: mapstack-backend
+  template:
+    metadata:
+      labels:
+        app: mapstack-backend
+    spec:
+      containers:
+      - name: api
+        image: mapstack/backend:latest
+        ports:
+        - containerPort: 8000
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: mapstack-secrets
+              key: database-url
+        - name: SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: mapstack-secrets
+              key: secret-key
+        resources:
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+```
+
+## 11. パフォーマンス最適化
+
+### 11.1 フロントエンド最適化
+- コードスプリッティング
+- 遅延ロード
+- メモ化（useMemo, useCallback）
+- 画像最適化
+- ビルド時の最適化
+
+### 11.2 バックエンド最適化
+- データベースインデックス
+- クエリ最適化
+- キャッシング戦略
+- 非同期処理
+- バッチ処理
+
+### 11.3 データベース最適化
+- インデックス設計
+- クエリチューニング
+- 接続プーリング
+- シャーディング戦略（必要に応じて）
+- 定期的なメンテナンス

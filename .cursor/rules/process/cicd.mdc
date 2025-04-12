@@ -1,0 +1,311 @@
+---
+description: CI/CD Pipeline Configuration and Operation Methods in MapStack Project
+globs: 
+alwaysApply: false
+---
+---
+title: CI/CD運用ガイドライン
+description: MapStackプロジェクトにおけるCI/CDパイプラインの設定と運用方法
+category: process
+importance: high
+last_updated: 2025-04-13
+---
+
+# CI/CD運用ガイドライン
+
+## 1. CI/CDアーキテクチャ
+
+### 1.1 使用ツール
+MapStackプロジェクトでは以下のツールを使用してCI/CDパイプラインを構築しています：
+
+- **コード管理**: GitHub
+- **CI/CD**: GitHub Actions
+- **デプロイ先**:
+  - **フロントエンド**: Vercel
+  - **バックエンド**: AWS ECS / Fargate
+  - **データベース**: AWS RDS (PostgreSQL)
+
+### 1.2 環境構成
+
+| 環境 | 目的 | 更新タイミング | URL形式 |
+|-----|-----|--------------|---------|
+| 開発 (dev) | 開発中の機能検証 | PR作成時に自動デプロイ | `dev-{branch-name}.mapstack.app` |
+| ステージング (staging) | リリース前の最終検証 | `develop`ブランチへのマージ時 | `staging.mapstack.app` |
+| 本番 (production) | エンドユーザー向け | `main`ブランチへのマージ時 | `mapstack.app` |
+
+## 2. CI (継続的インテグレーション)
+
+### 2.1 自動テスト実行
+
+PRが作成されたとき、以下のテストが自動実行されます：
+
+- **フロントエンド**:
+  - 静的解析 (ESLint, TypeScript)
+  - ユニットテスト (Jest)
+  - コンポーネントテスト (React Testing Library)
+  - E2Eテスト (Playwright)
+
+- **バックエンド**:
+  - 静的解析 (pylint, mypy)
+  - ユニットテスト (pytest)
+  - 統合テスト (pytest)
+  - APIテスト
+
+### 2.2 コードクオリティチェック
+
+- **コードカバレッジ**: 最低限のカバレッジ基準（85%）を満たすことを検証
+- **セキュリティスキャン**: Dependabotによる依存関係の脆弱性チェック
+- **コード品質**: SonarCloudによる静的解析
+
+### 2.3 CI実行設定
+
+```yaml
+# .github/workflows/frontend-ci.yml
+name: フロントエンドCI
+
+on:
+  pull_request:
+    branches: [ develop, main ]
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/frontend-ci.yml'
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Node.jsセットアップ
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: 'frontend/package-lock.json'
+      - name: 依存関係インストール
+        run: cd frontend && npm ci
+      - name: Lintチェック
+        run: cd frontend && npm run lint
+      - name: TypeScriptチェック
+        run: cd frontend && npm run typecheck
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Node.jsセットアップ
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: 'frontend/package-lock.json'
+      - name: 依存関係インストール
+        run: cd frontend && npm ci
+      - name: ユニットテスト実行
+        run: cd frontend && npm test
+      - name: カバレッジレポートアップロード
+        uses: codecov/codecov-action@v3
+        with:
+          file: ./frontend/coverage/coverage-final.json
+          flags: frontend
+          fail_ci_if_error: true
+```
+
+## 3. CD (継続的デリバリー/デプロイメント)
+
+### 3.1 自動デプロイフロー
+
+| トリガー | デプロイ先 | 実行内容 |
+|---------|-----------|---------|
+| PRの作成 | 開発環境 | PRごとにプレビュー環境を自動デプロイ |
+| `develop`へのマージ | ステージング環境 | テスト成功後、自動デプロイ |
+| `main`へのマージ | 本番環境 | 手動承認後、自動デプロイ |
+
+### 3.2 デプロイ設定
+
+```yaml
+# .github/workflows/backend-deploy.yml
+name: バックエンドデプロイ
+
+on:
+  push:
+    branches: [ develop, main ]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/backend-deploy.yml'
+
+jobs:
+  test:
+    # テストジョブ（CIと同様）
+    
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: AWS認証設定
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-northeast-1
+      - name: ECRログイン
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+      - name: Dockerビルド＆プッシュ
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: mapstack-backend
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          cd backend
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          echo "::set-output name=image::$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    # developブランチの場合はステージング環境へ、mainブランチの場合は本番環境へデプロイ
+    environment:
+      name: ${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}
+    steps:
+      - name: AWS認証設定
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-northeast-1
+      - name: ECSタスク定義の取得
+        run: |
+          aws ecs describe-task-definition --task-definition mapstack-backend-${{ github.ref == 'refs/heads/main' && 'prod' || 'staging' }} --query taskDefinition > task-definition.json
+      - name: タスク定義の更新
+        id: task-def
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: task-definition.json
+          container-name: mapstack-backend
+          image: ${{ needs.build.outputs.image }}
+      - name: ECSへデプロイ
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v1
+        with:
+          task-definition: ${{ steps.task-def.outputs.task-definition }}
+          service: mapstack-backend-${{ github.ref == 'refs/heads/main' && 'prod' || 'staging' }}
+          cluster: mapstack-${{ github.ref == 'refs/heads/main' && 'prod' || 'staging' }}
+          wait-for-service-stability: true
+```
+
+### 3.3 Vercelフロントエンドデプロイ
+
+フロントエンドはVercelと連携して自動デプロイを行います：
+
+- GitHub連携により、PRごとにプレビュー環境が自動作成されます
+- `develop`ブランチへのマージでステージング環境へ自動デプロイされます
+- `main`ブランチへのマージで本番環境へ自動デプロイされます
+
+## 4. 環境変数管理
+
+### 4.1 環境変数の設定場所
+
+| 環境変数タイプ | 保存場所 | 使用タイミング |
+|--------------|---------|--------------|
+| 非機密情報 | `.env.example`ファイル | コード内での参照例としてリポジトリに保存 |
+| 開発用変数 | GitHubリポジトリのDevelopment環境シークレット | 開発環境デプロイ時 |
+| ステージング用変数 | GitHubリポジトリのStaging環境シークレット | ステージング環境デプロイ時 |
+| 本番用変数 | GitHubリポジトリのProduction環境シークレット | 本番環境デプロイ時 |
+
+### 4.2 環境変数の命名規則
+
+- プレフィックスでサービスを識別（例: `DB_`, `AWS_`, `AUTH_`）
+- スネークケースを使用（例: `DATABASE_URL`）
+- 環境ごとの分離は GitHub Environments で管理（変数名は環境間で統一）
+
+### 4.3 シークレット管理のベストプラクティス
+
+- 開発者の個人環境では `.env.local` ファイルを使用（`.gitignore` に追加）
+- 本番シークレットは最小権限の原則に従い、必要最小限のチームメンバーだけがアクセス可能に設定
+- ローテーション計画を策定し、定期的にシークレットを更新
+
+## 5. デプロイメントプロセス
+
+### 5.1 デプロイメントフロー
+
+1. 開発者が機能ブランチで開発
+2. PRを作成し、自動的にプレビュー環境へデプロイ
+3. レビュー＆承認後、`develop`ブランチへマージ
+4. 自動的にステージング環境へデプロイ
+5. ステージング環境でのテスト完了後、`main`ブランチへのPRを作成
+6. 承認後、`main`へマージ
+7. 本番環境への最終承認（手動）
+8. 本番環境へデプロイ
+
+### 5.2 デプロイのロールバック手順
+
+1. **即時ロールバック（緊急時）**:
+   ```bash
+   # 前回のECSタスク定義にロールバック
+   aws ecs update-service --cluster mapstack-prod --service mapstack-backend-prod --task-definition mapstack-backend-prod:前回のリビジョン番号 --force-new-deployment
+   
+   # Vercelのデプロイをロールバック（UIまたはCLIから実行）
+   vercel rollback --environment production
+   ```
+
+2. **コードレベルでのロールバック**:
+   ```bash
+   # mainブランチをロールバック
+   git revert -m 1 MERGE_COMMIT_HASH
+   git push origin main
+   ```
+
+### 5.3 緊急デプロイプロセス
+
+1. 緊急修正ブランチを `main` から直接作成
+2. 修正後、CIテストを実行
+3. `main` に直接マージ（最低2名の承認者必須）
+4. 本番環境への緊急デプロイを実行
+5. デプロイ後、`develop` ブランチにも同様の修正をマージ
+
+## 6. モニタリングと通知
+
+### 6.1 デプロイメント通知
+
+- **成功時**: Slack `#deploy-success` チャンネルに自動通知
+- **失敗時**: Slack `#deploy-alerts` チャンネルに緊急通知 + チーム担当者にメール
+
+```yaml
+# 通知設定例
+jobs:
+  deploy:
+    # ... 既存の設定 ...
+    steps:
+      # ... 既存のステップ ...
+      - name: Slack通知
+        uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          fields: repo,message,commit,author,action,eventName,workflow
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        if: always()
+```
+
+### 6.2 デプロイメント追跡
+
+- デプロイバージョンをアプリケーション内に表示（フッターまたは管理画面）
+- Datadog APM でデプロイイベントをマーキング
+- デプロイ後のエラー率、パフォーマンス変化をモニタリング
+
+## 7. 継続的インテグレーション/継続的デプロイメントの改善
+
+### 7.1 改善サイクル
+
+1. デプロイに関するメトリクスを収集（成功率、リードタイム、復旧時間など）
+2. 四半期ごとにCI/CDパイプラインのレビューを実施
+3. ボトルネックを特定し、改善計画を策定
+4. 自動化の範囲を段階的に拡大
+
+### 7.2 開発者エクスペリエンスの向上
+
+- ローカル開発環境とCI環境の一貫性の確保
+- セルフサービスのデプロイメントダッシュボード
+- Slack経由でのデプロイステータスチェックとコントロール
+- デプロイ履歴と変更内容の簡単な確認ツール

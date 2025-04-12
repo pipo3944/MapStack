@@ -1,0 +1,408 @@
+---
+description: Database Query and Performance Optimization Techniques in MapStack
+globs: 
+alwaysApply: false
+---
+---
+title: データベースパフォーマンス最適化
+description: MapStackにおけるデータベースクエリとパフォーマンスの最適化手法
+category: database
+importance: high
+last_updated: 2025-04-13
+---
+
+# データベースパフォーマンス最適化
+
+## 1. クエリ最適化の基本原則
+
+### 1.1 基本的な考え方
+- パフォーマンスはアプリケーション設計の初期段階から考慮する
+- N+1問題を常に意識する
+- 大量データ取得は常にページネーションを使用する
+- クエリの複雑さよりも実行時間と結果セットのサイズを重視する
+
+### 1.2 クエリ分析ツール
+- **EXPLAIN ANALYZE**: クエリプランと実際の実行時間を分析
+- **pg_stat_statements**: 実際の環境での頻度と実行時間を測定
+- **pgAdmin/DBeaver**: クエリ可視化と実行計画の視覚的確認
+
+## 2. インデックス戦略
+
+### 2.1 インデックス基本原則
+- 検索条件、結合条件、ソート条件にはインデックスを作成
+- インデックスは読み取りを高速化するが書き込みを遅くすることを理解
+- カーディナリティ（値の一意性）の高い列に優先的にインデックスを作成
+- 複合インデックスは最も頻繁に使用される検索パターンに合わせて作成
+
+### 2.2 インデックスタイプとユースケース
+
+| インデックスタイプ | 用途 | 例 |
+|----------------|------|-----|
+| B-tree（デフォルト） | 等価・範囲・ソート | `CREATE INDEX idx_users_email ON users(email)` |
+| Hash | 等価比較のみ | `CREATE INDEX idx_sessions_token ON sessions USING HASH (token)` |
+| GIN | 配列・JSON・全文検索 | `CREATE INDEX idx_documents_content ON documents USING GIN (to_tsvector('japanese', content))` |
+| BRIN | 大きなテーブルの範囲検索 | `CREATE INDEX idx_logs_created_at ON logs USING BRIN (created_at)` |
+
+### 2.3 複合インデックスの設計
+
+最も効果的な複合インデックスの設計方法：
+1. 等価条件（`=`）の列を先頭に配置
+2. 範囲条件（`>`、`<`、`BETWEEN`）の列はその後ろ
+3. `IN`リストや`OR`条件は複数のインデックスを検討
+4. ソート条件も含めた複合インデックスを検討
+
+```sql
+-- 良い例: user_idでの等価検索とcreated_atでの範囲検索の組み合わせ
+CREATE INDEX idx_orders_user_date ON orders(user_id, created_at);
+
+-- 考慮すべき点: statusとcreated_atの両方でフィルタリングする場合は別のインデックス
+CREATE INDEX idx_orders_status_date ON orders(status, created_at);
+```
+
+### 2.4 インデックスメンテナンス
+- 定期的に未使用インデックスを特定して削除
+- 大規模な更新/削除後は`VACUUM ANALYZE`を実行
+- インデックス再構築で断片化を解消
+
+```sql
+-- 未使用インデックスの特定
+SELECT idstat.relname AS table_name,
+       indexrelname AS index_name,
+       idstat.idx_scan AS times_used
+FROM pg_stat_user_indexes AS idstat
+JOIN pg_stat_user_tables AS tabstat ON idstat.relname = tabstat.relname
+WHERE idstat.idx_scan < 10
+ORDER BY idstat.relname, indexrelname;
+
+-- インデックス再構築
+REINDEX INDEX idx_name;
+REINDEX TABLE table_name;
+```
+
+## 3. ORMの効率的な使用
+
+### 3.1 SQLAlchemyでのベストプラクティス
+- セッション管理と接続プールの適切な設定
+- 遅延ローディングと即時ローディングの適切な使い分け
+- 結合クエリの最適化
+
+```python
+# N+1問題を避けるために関連エンティティを事前にロード
+users = (
+    db.session.query(User)
+    .options(joinedload(User.orders))
+    .filter(User.is_active == True)
+    .all()
+)
+
+# 必要な列のみ選択
+user_names = (
+    db.session.query(User.id, User.name)
+    .filter(User.is_active == True)
+    .all()
+)
+
+# バルクオペレーションの使用
+db.session.query(User).filter(User.last_login < one_year_ago).update(
+    {"is_active": False}, synchronize_session=False
+)
+db.session.commit()
+```
+
+### 3.2 クエリ結果のキャッシュ
+- 頻繁に使用され、めったに変更されないデータはキャッシュ
+- キャッシュの有効期限を適切に設定
+- キャッシュの無効化イベントを実装
+
+```python
+def get_active_users():
+    cache_key = "active_users_list"
+    # キャッシュから取得を試みる
+    cached_result = redis_client.get(cache_key)
+    
+    if cached_result:
+        return json.loads(cached_result)
+    
+    # DBから取得
+    users = db.session.query(User).filter(User.is_active == True).all()
+    result = [user.to_dict() for user in users]
+    
+    # キャッシュに保存（有効期限:10分）
+    redis_client.setex(
+        cache_key,
+        timedelta(minutes=10),
+        json.dumps(result)
+    )
+    
+    return result
+```
+
+## 4. パフォーマンスチューニング手法
+
+### 4.1 クエリ最適化テクニック
+
+#### インデックスを活用するクエリ
+```sql
+-- インデックスを活用できるクエリ
+SELECT * FROM users WHERE email = 'user@example.com';
+
+-- インデックスを活用できないクエリ（関数使用）
+SELECT * FROM users WHERE LOWER(email) = 'user@example.com';
+-- 代替策: 関数ベースインデックスの作成
+CREATE INDEX idx_users_email_lower ON users(LOWER(email));
+```
+
+#### 効率的なページネーション
+```sql
+-- 非効率的なページネーション（大きなオフセット）
+SELECT * FROM products ORDER BY created_at DESC LIMIT 20 OFFSET 10000;
+
+-- 効率的なページネーション（キーセットページネーション）
+SELECT * FROM products 
+WHERE created_at < '2023-01-01T12:34:56'  -- 前ページの最後のcreated_at
+ORDER BY created_at DESC LIMIT 20;
+```
+
+#### ウィンドウ関数の活用
+```sql
+-- 各ユーザーの最新注文を効率的に取得
+SELECT * FROM (
+  SELECT 
+    orders.*,
+    ROW_NUMBER() OVER (PARTITION BY user_id ORDER BY created_at DESC) AS rn
+  FROM orders
+) subq
+WHERE rn = 1;
+```
+
+### 4.2 クエリヒント
+必要に応じてクエリプランナーの挙動を制御：
+
+```sql
+-- インデックススキャンを強制
+SELECT /*+ IndexScan(users idx_users_email) */ 
+  * FROM users WHERE email LIKE 'test%';
+
+-- シーケンシャルスキャンを強制
+SELECT /*+ SeqScan(users) */ 
+  * FROM users WHERE is_active = true;
+
+-- ネステッドループ結合を強制
+SELECT /*+ NestLoop(orders users) */ 
+  * FROM orders JOIN users ON orders.user_id = users.id;
+```
+
+### 4.3 パーティショニング
+大規模テーブルの管理とクエリパフォーマンス向上：
+
+```sql
+-- 日付でパーティショニングされたログテーブル
+CREATE TABLE logs (
+    id SERIAL,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    level VARCHAR(10),
+    message TEXT
+) PARTITION BY RANGE (created_at);
+
+-- 月別パーティションの作成
+CREATE TABLE logs_y2023m01 PARTITION OF logs
+    FOR VALUES FROM ('2023-01-01') TO ('2023-02-01');
+CREATE TABLE logs_y2023m02 PARTITION OF logs
+    FOR VALUES FROM ('2023-02-01') TO ('2023-03-01');
+
+-- パーティション単位のインデックス
+CREATE INDEX idx_logs_y2023m01_level ON logs_y2023m01(level);
+```
+
+## 5. 大量データ処理
+
+### 5.1 バッチ処理
+- 大量のレコードを一度に処理しない
+- チャンク単位でトランザクションを分割
+- バックグラウンドジョブやスケジューラーを活用
+
+```python
+def process_large_dataset(total_records, chunk_size=1000):
+    """大量のレコードを小さなチャンクで処理する"""
+    for offset in range(0, total_records, chunk_size):
+        # チャンク単位でデータを取得
+        records = (
+            db.session.query(LargeTable)
+            .order_by(LargeTable.id)
+            .limit(chunk_size)
+            .offset(offset)
+            .all()
+        )
+        
+        # 各チャンクを処理
+        for record in records:
+            process_record(record)
+        
+        # 各チャンク後にコミット
+        db.session.commit()
+```
+
+### 5.2 非同期処理
+- 長時間実行クエリはバックグラウンドワーカーで実行
+- 結果はキャッシュまたは通知メカニズムで配信
+- Celeryなどのタスクキューを活用
+
+```python
+@celery_app.task
+def generate_large_report(user_id, report_params):
+    """大規模レポートを非同期で生成"""
+    try:
+        # 長時間実行クエリを実行
+        result = run_complex_query(report_params)
+        
+        # 結果をストレージに保存
+        report_url = save_report_to_storage(result)
+        
+        # ユーザーに通知
+        notify_user(user_id, f"レポートが完成しました: {report_url}")
+        
+    except Exception as e:
+        # エラー通知
+        notify_user(user_id, f"レポート生成に失敗しました: {str(e)}")
+```
+
+## 6. 実行計画の分析
+
+### 6.1 EXPLAIN ANALYZEの読み方
+```sql
+EXPLAIN ANALYZE SELECT * FROM users WHERE email = 'test@example.com';
+```
+
+重要な要素：
+- **Seq Scan / Index Scan**: スキャン方法
+- **cost**: 推定コスト（スタートアップ, 総コスト）
+- **rows**: 返される推定行数
+- **actual time**: 実際の実行時間（ミリ秒）
+- **loops**: 実行回数
+
+### 6.2 典型的な問題とその対策
+
+| 問題 | 症状 | 対策 |
+|-----|-----|-----|
+| シーケンシャルスキャン | 大きなテーブルでの`Seq Scan` | 適切なインデックスの作成 |
+| 非効率なジョイン | `Nested Loop` / 高コスト | 結合条件のインデックス作成、結合順序の最適化 |
+| 不正確な統計 | 実際の行数と推定行数の大きな差 | `ANALYZE` の実行 |
+| 遅いソート | `Sort` オペレーションの高コスト | ソート列へのインデックス作成 |
+| フィルターの非効率 | 多数の行に対する`Filter` | WHERE句の条件を見直し、計算を最小化 |
+
+## 7. 高度なDB機能
+
+### 7.1 マテリアライズドビュー
+複雑なクエリ結果をキャッシュ：
+
+```sql
+-- 複雑な集計をマテリアライズドビューで事前計算
+CREATE MATERIALIZED VIEW monthly_sales AS
+SELECT 
+    DATE_TRUNC('month', created_at) AS month,
+    product_id,
+    COUNT(*) AS order_count,
+    SUM(amount) AS total_amount
+FROM orders
+GROUP BY DATE_TRUNC('month', created_at), product_id;
+
+-- インデックスを追加
+CREATE UNIQUE INDEX idx_monthly_sales_month_product 
+ON monthly_sales(month, product_id);
+
+-- 定期的に更新
+REFRESH MATERIALIZED VIEW monthly_sales;
+```
+
+### 7.2 共通テーブル表現 (CTE)
+複雑なクエリを構造化：
+
+```sql
+-- 段階的なデータ処理を明確に表現
+WITH active_users AS (
+    SELECT id, name, email FROM users WHERE is_active = true
+),
+user_order_counts AS (
+    SELECT 
+        user_id, 
+        COUNT(*) AS order_count
+    FROM orders
+    WHERE created_at > CURRENT_DATE - INTERVAL '30 days'
+    GROUP BY user_id
+)
+SELECT 
+    u.name,
+    u.email,
+    COALESCE(oc.order_count, 0) AS recent_orders
+FROM active_users u
+LEFT JOIN user_order_counts oc ON u.id = oc.user_id
+ORDER BY recent_orders DESC;
+```
+
+### 7.3 UPSERTの活用
+競合時の動作を指定した挿入：
+
+```sql
+-- データの存在確認+更新の代わりに単一のUPSERT操作
+INSERT INTO user_preferences (user_id, preference_key, preference_value)
+VALUES ('123', 'theme', 'dark')
+ON CONFLICT (user_id, preference_key) 
+DO UPDATE SET 
+    preference_value = EXCLUDED.preference_value,
+    updated_at = NOW();
+```
+
+## 8. パフォーマンスのモニタリングと改善
+
+### 8.1 モニタリング指標
+- クエリ実行時間
+- インデックス使用率
+- キャッシュヒット率
+- ロック待ち時間
+- ディスクI/O
+
+### 8.2 モニタリングツール
+- pg_stat_statements
+- pgBadger
+- Prometheus + Grafana
+- APM（Application Performance Monitoring）ツール
+
+### 8.3 定期的なメンテナンス
+```sql
+-- 統計情報の更新
+ANALYZE VERBOSE;
+
+-- 不要領域の回収
+VACUUM FULL;
+
+-- インデックスの断片化解消
+REINDEX DATABASE [dbname];
+
+-- 使用されていないインデックスの確認と整理
+-- (上記の未使用インデックスクエリを使用)
+```
+
+## 9. ベストプラクティス
+
+1. **データベース設計時**:
+   - 正規化と非正規化のバランスを考慮
+   - 適切なデータ型の選択
+   - 必要に応じてパーティショニング戦略を計画
+
+2. **クエリ最適化**:
+   - 必要な列のみ選択 (`SELECT *` を避ける)
+   - JOINは必要最小限に
+   - サブクエリよりもJOINを優先
+   - WHERE句の条件順序を意識
+
+3. **アプリケーション層**:
+   - 接続プールの適切な設定
+   - N+1問題を防ぐための事前ロード
+   - 適切なページネーション実装
+   - 再利用可能なクエリ結果のキャッシュ
+
+4. **継続的改善**:
+   - パフォーマンステストの自動化
+   - スロークエリログの分析
+   - インデックス使用状況の定期確認
+   - データベースメトリクスの監視

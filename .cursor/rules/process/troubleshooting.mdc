@@ -1,0 +1,590 @@
+---
+description: Troubleshooting Procedures During Development in MapStack
+globs: 
+alwaysApply: false
+---
+---
+title: トラブルシューティングガイド
+description: MapStackにおける開発時のトラブルシューティング手順
+category: process
+importance: medium
+last_updated: 2025-04-13
+---
+
+# トラブルシューティングガイド
+
+## 1. 開発環境のセットアップ問題
+
+### 1.1 環境変数関連の問題
+**症状**: 環境変数が読み込まれない、設定した値が反映されない
+**解決策**:
+1. `.env.local`ファイルが正しい場所にあるか確認
+2. 変数名が正確か確認（フロントエンドでは`NEXT_PUBLIC_`プレフィックスに注意）
+3. アプリケーションを再起動して変更を適用
+4. フロントエンドでは`console.log(process.env)`で読み込まれている環境変数を確認
+5. バックエンドでは`print(os.environ)`で環境変数を確認
+
+**サンプルコード**:
+```typescript
+// Next.jsでの環境変数の使用
+// .env.local
+NEXT_PUBLIC_API_URL=http://localhost:8000/api
+
+// コンポーネント内
+const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+if (!apiUrl) {
+  console.error('API URLが設定されていません');
+}
+```
+
+```python
+# FastAPIでの環境変数の読み込み
+# .env
+DATABASE_URL=postgresql://user:password@localhost/dbname
+
+# app/core/config.py
+from pydantic_settings import BaseSettings
+
+class Settings(BaseSettings):
+    DATABASE_URL: str
+    API_KEY: str
+    
+    class Config:
+        env_file = ".env"
+
+settings = Settings()
+```
+
+### 1.2 依存関係の問題
+**症状**: パッケージのインストールエラー、依存関係の競合
+**解決策**:
+1. パッケージマネージャのキャッシュをクリア
+   ```bash
+   # npm
+   npm cache clean --force
+   
+   # Python
+   pip cache purge
+   ```
+2. lock ファイルを削除して再インストール
+   ```bash
+   # npm
+   rm package-lock.json
+   npm install
+   
+   # Python
+   rm poetry.lock
+   poetry install
+   ```
+3. Node.jsやPythonのバージョンを確認
+4. 仮想環境を再作成（Python）
+
+### 1.3 コンテナ化環境の問題
+**症状**: Dockerコンテナが起動しない、ネットワーク接続の問題
+**解決策**:
+1. Dockerログを確認
+   ```bash
+   docker logs <container_id>
+   ```
+2. コンテナを再ビルド
+   ```bash
+   docker-compose down
+   docker-compose build --no-cache
+   docker-compose up
+   ```
+3. ネットワーク設定を確認
+   ```bash
+   docker network ls
+   docker network inspect <network_name>
+   ```
+4. ボリュームマウントが正しいか確認
+
+## 2. フロントエンド開発の問題
+
+### 2.1 ビルド・コンパイルエラー
+**症状**: TypeScriptコンパイルエラー、ビルド失敗
+**解決策**:
+1. エラーメッセージを詳細に確認
+2. 型定義が正しいか確認
+3. 最新の`develop`ブランチと同期
+4. `node_modules`を削除して再インストール
+5. TypeScriptバージョンを確認
+
+**一般的なエラーと解決策**:
+```typescript
+// エラー: Object is possibly 'undefined'
+// 解決策: オプショナルチェーンを使用
+const userName = user?.name; // userがundefinedの場合でもエラーにならない
+
+// エラー: Type '{ value: string; onChange: (e: any) => void; }' is not assignable to type 'IntrinsicAttributes'
+// 解決策: propsの型を確認、コンポーネントの定義を見直す
+interface InputProps {
+  value: string;
+  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+}
+
+// エラー: Cannot find module
+// 解決策: パスが正しいか確認、エイリアスが設定されているか確認
+import { Button } from '@/components/ui/Button'; // tsconfig.jsonにパスマッピングが必要
+```
+
+### 2.2 レンダリングの問題
+**症状**: コンポーネントが表示されない、スタイルが適用されない
+**解決策**:
+1. React DevToolsでコンポーネント階層を確認
+2. 条件付きレンダリングのロジックを確認
+3. コンソールエラーを確認
+4. スタイルのスコープとクラス名を確認
+5. ブラウザキャッシュをクリア
+
+**サンプルコード**:
+```tsx
+// 条件付きレンダリングのデバッグ
+return (
+  <div>
+    {console.log('isVisible:', isVisible)}
+    {console.log('data:', data)}
+    {isVisible && data ? (
+      <UserList users={data} />
+    ) : (
+      <div>No users found.</div>
+    )}
+  </div>
+);
+
+// スタイルのデバッグ
+// Tailwindクラスが適用されているか確認
+<button className={`bg-blue-500 text-white ${isActive ? 'opacity-100' : 'opacity-50'}`}>
+  {isActive ? 'Active' : 'Inactive'}
+</button>
+```
+
+### 2.3 状態管理の問題
+**症状**: 状態更新が反映されない、コンポーネント間の状態共有の問題
+**解決策**:
+1. 状態の初期化とセッターの使用を確認
+2. Zustandストアのセレクタと更新関数をデバッグ
+3. コンポーネントの不要な再レンダリングを確認
+4. React DevToolsのProfilerでレンダリングを分析
+
+**サンプルコード**:
+```tsx
+// Zustandストアのデバッグ
+import { create } from 'zustand';
+
+type State = {
+  count: number;
+  increment: () => void;
+}
+
+const useStore = create<State>((set) => ({
+  count: 0,
+  increment: () => set((state) => ({ count: state.count + 1 })),
+}));
+
+// コンポーネント内でのデバッグ
+function Counter() {
+  const { count, increment } = useStore();
+  console.log('Counter rendering with count:', count);
+  
+  return (
+    <div>
+      <p>Count: {count}</p>
+      <button onClick={() => {
+        increment();
+        console.log('After increment click, store state:', useStore.getState());
+      }}>
+        Increment
+      </button>
+    </div>
+  );
+}
+```
+
+## 3. バックエンド開発の問題
+
+### 3.1 API・エンドポイントの問題
+**症状**: APIリクエストの失敗、エンドポイントが応答しない
+**解決策**:
+1. サーバーログを確認
+2. エンドポイントのルーティング設定を確認
+3. リクエストパラメータとボディの形式を確認
+4. CORSの設定を確認
+5. Swagger UIでAPIをテスト
+
+```python
+# FastAPIでのエンドポイントデバッグ
+@app.get("/users/{user_id}")
+async def get_user(user_id: str, db: Session = Depends(get_db)):
+    print(f"リクエストを受信: user_id={user_id}")
+    
+    user = db.query(User).filter(User.id == user_id).first()
+    print(f"クエリ結果: user={user}")
+    
+    if not user:
+        print(f"ユーザーが見つかりません: user_id={user_id}")
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    return user
+```
+
+### 3.2 データベース接続の問題
+**症状**: データベース接続エラー、クエリの失敗
+**解決策**:
+1. 接続文字列を確認
+2. データベースサーバーの稼働状況を確認
+3. テーブルとスキーマが正しいか確認
+4. SQLクエリをログに出力して確認
+5. トランザクションが正しく管理されているか確認
+
+```python
+# SQLAlchemyでのデバッグ
+# logging設定
+import logging
+logging.basicConfig()
+logging.getLogger('sqlalchemy.engine').setLevel(logging.INFO)
+
+# クエリのデバッグ
+def get_user_by_email(db: Session, email: str):
+    try:
+        query = db.query(User).filter(User.email == email)
+        print(f"実行するクエリ: {query}")
+        user = query.first()
+        print(f"クエリ結果: {user}")
+        return user
+    except Exception as e:
+        print(f"データベースエラー: {str(e)}")
+        raise
+```
+
+### 3.3 認証・認可の問題
+**症状**: 認証エラー、アクセス権限の問題
+**解決策**:
+1. トークンの有効期限と形式を確認
+2. 認証ヘッダーが正しく送信されているか確認
+3. ユーザー権限のデバッグ出力
+4. セッション管理を確認
+5. OAuthフローをデバッグ
+
+```python
+# JWT認証のデバッグ
+@app.get("/protected")
+async def protected_route(current_user: User = Depends(get_current_user)):
+    print(f"認証ユーザー: id={current_user.id}, role={current_user.role}")
+    
+    if current_user.role != "admin":
+        print(f"権限不足: user_id={current_user.id} role={current_user.role}")
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+    
+    return {"message": "This is protected data"}
+```
+
+## 4. データベース問題
+
+### 4.1 マイグレーションの問題
+**症状**: マイグレーション失敗、スキーマの不一致
+**解決策**:
+1. マイグレーション履歴を確認
+   ```bash
+   # Alembic
+   alembic history
+   
+   # Django
+   python manage.py showmigrations
+   ```
+2. マイグレーションファイルの依存関係を確認
+3. 開発環境とステージング環境の差異を確認
+4. マイグレーションを再生成または手動で修正
+
+### 4.2 パフォーマンスの問題
+**症状**: クエリの遅延、データベース負荷の増大
+**解決策**:
+1. スロークエリログを有効化して分析
+2. インデックスの有無と使用状況を確認
+3. 実行計画を分析
+   ```sql
+   EXPLAIN ANALYZE SELECT * FROM users WHERE email LIKE '%example.com';
+   ```
+4. N+1クエリ問題を解決（Eager Loadingを使用）
+5. コネクションプールの設定を確認
+
+### 4.3 データ整合性の問題
+**症状**: 期待したデータが取得できない、外部キー制約の違反
+**解決策**:
+1. テーブル間の関係を確認
+2. トランザクション管理が適切か確認
+3. 制約違反のエラーメッセージを詳細に分析
+4. テストデータを使って再現と検証
+5. 必要に応じてデータ修復スクリプトを作成
+
+## 5. CI/CD問題
+
+### 5.1 CI/CDパイプラインの失敗
+**症状**: GitHub Actions、ビルドサーバーの失敗
+**解決策**:
+1. CI/CDログを詳細に確認
+2. ローカル環境で同じコマンドを実行してテスト
+3. 依存関係が正しくキャッシュされているか確認
+4. ワークフロー定義を確認
+5. 環境変数とシークレットが正しく設定されているか確認
+
+```yaml
+# GitHub Actionsのデバッグ方法
+name: Debug Workflow
+
+on:
+  workflow_dispatch:
+
+jobs:
+  debug:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Show environment
+        run: env
+        
+      - name: List files
+        run: ls -la
+        
+      - name: Check Node.js version
+        run: node -v
+        
+      - name: Check npm dependencies
+        run: npm list --depth=0
+```
+
+### 5.2 デプロイメントの問題
+**症状**: デプロイが失敗する、アプリケーションが起動しない
+**解決策**:
+1. デプロイログを確認
+2. 環境固有の設定が正しいか確認
+3. リソース（メモリ、CPU）の制限を確認
+4. ネットワーク設定（ファイアウォール、セキュリティグループ）
+5. 静的アセットのビルドと配信を確認
+
+```bash
+# AWSへのデプロイをデバッグ
+aws ecs describe-services --cluster mapstack-prod --services mapstack-backend-prod
+
+# Vercelデプロイのデバッグ
+vercel logs mapstack-frontend
+```
+
+## 6. 一般的なデバッグテクニック
+
+### 6.1 システマティックなアプローチ
+1. **問題の特定**: 具体的な症状と発生条件を明確に
+2. **仮説の立案**: 考えられる原因の列挙
+3. **検証**: 一つずつ仮説を検証
+4. **解決策の実施**: 変更を小さく保ち、一度に一つの変更
+5. **検証**: 問題が解決したことを確認
+6. **文書化**: 問題と解決策を記録
+
+### 6.2 効果的なロギング
+- **ログレベルの使い分け**: ERROR, WARNING, INFO, DEBUG
+- **構造化ロギング**: JSON形式でログを出力し検索可能に
+- **コンテキスト情報の付加**: ユーザーID、リクエストID、エンドポイント
+- **例外スタックトレースの出力**: 完全なスタックトレースを保存
+
+```javascript
+// フロントエンドでの構造化ログ
+function logError(error, context = {}) {
+  console.error(JSON.stringify({
+    timestamp: new Date().toISOString(),
+    level: 'ERROR',
+    message: error.message,
+    stack: error.stack,
+    ...context
+  }));
+}
+
+try {
+  // 何らかの処理
+} catch (error) {
+  logError(error, { 
+    userId: currentUser.id, 
+    action: 'submitForm',
+    formData: { ...safeFormData } // 機密情報を除去
+  });
+}
+```
+
+```python
+# バックエンドでの構造化ログ
+import structlog
+import logging
+
+logger = structlog.get_logger()
+
+def get_user_profile(user_id: str):
+    logger.info("user_profile_request", user_id=user_id)
+    try:
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            logger.warning("user_not_found", user_id=user_id)
+            return None
+        logger.info("user_profile_success", user_id=user_id)
+        return user
+    except Exception as e:
+        logger.exception("user_profile_error", user_id=user_id, error=str(e))
+        raise
+```
+
+### 6.3 効果的なデバッグツール
+- **ブラウザ開発者ツール**: ネットワーク、コンソール、ブレークポイント
+- **React/Redux DevTools**: コンポーネント階層、状態変化の追跡
+- **Postman/Insomnia**: APIテストとデバッグ
+- **データベースGUI**: DBeaver, pgAdmin
+- **パフォーマンス分析**: Lighthouse, Datadog APM
+
+### 6.4 コード品質ツールの活用
+- **Linter**: ESLint, Flake8, Pylint
+- **Formatter**: Prettier, Black
+- **型チェック**: TypeScript, MyPy
+- **静的解析**: SonarQube, CodeQL
+- **セキュリティスキャン**: OWASP ZAP, npm audit
+
+## 7. よくある問題と解決策 (FAQ)
+
+### 7.1 フロントエンド FAQ
+
+**Q: CORSエラーが発生する**  
+A: バックエンドのCORS設定を確認。フロントエンドとバックエンドのオリジン（ドメイン、ポート）が一致しているか確認。
+
+```typescript
+// フロントエンド側
+fetch('https://api.mapstack.app/users', {
+  method: 'GET',
+  credentials: 'include', // クッキーを含める場合
+  headers: {
+    'Content-Type': 'application/json'
+  }
+});
+```
+
+```python
+# バックエンド側（FastAPI）
+from fastapi.middleware.cors import CORSMiddleware
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "https://mapstack.app"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+```
+
+**Q: メモリリークが発生する**  
+A: useEffectのクリーンアップ関数を確認。イベントリスナーの解除漏れ、setIntervalのクリアを確認。
+
+```tsx
+// 良い例
+useEffect(() => {
+  const timer = setInterval(() => {
+    // 何らかの処理
+  }, 1000);
+  
+  return () => clearInterval(timer); // クリーンアップ
+}, []);
+
+// 悪い例
+useEffect(() => {
+  setInterval(() => {
+    // クリーンアップなし → メモリリーク
+  }, 1000);
+}, []);
+```
+
+**Q: SSRで`window is not defined`エラーが発生する**  
+A: サーバーサイドレンダリング時にブラウザAPIを使用しないように条件分岐する。
+
+```tsx
+// 解決策: useEffectを使用して、マウント後にのみブラウザAPIを使用
+useEffect(() => {
+  // ここでwindowやdocumentを安全に使用できる
+  const handleResize = () => {
+    setWindowWidth(window.innerWidth);
+  };
+  
+  window.addEventListener('resize', handleResize);
+  return () => window.removeEventListener('resize', handleResize);
+}, []);
+
+// または条件チェックを使用
+const isBrowser = typeof window !== 'undefined';
+if (isBrowser) {
+  // ブラウザ環境でのみ実行されるコード
+}
+```
+
+### 7.2 バックエンド FAQ
+
+**Q: 非同期処理が完了する前にレスポンスが返ってしまう**  
+A: awaitの使用を確認。非同期関数の戻り値が適切に処理されているか確認。
+
+```python
+# 悪い例
+@app.post("/users/")
+async def create_user(user: UserCreate, db: Session = Depends(get_db)):
+    db_user = user_service.create_user(db, user)  # awaitが必要な場合
+    return db_user
+
+# 良い例
+@app.post("/users/")
+async def create_user(user: UserCreate, db: Session = Depends(get_db)):
+    db_user = await user_service.create_user(db, user)  # 非同期関数をawait
+    return db_user
+```
+
+**Q: データベース接続が切れる/接続プールの枯渇**  
+A: 接続のクローズが適切に行われているか。接続プールの設定を確認。
+
+```python
+# 良い例 - contextマネージャーを使用
+async def get_user(user_id: str):
+    async with async_session() as session:  # 自動的にクローズされる
+        user = await session.get(User, user_id)
+        return user
+
+# 悪い例 - 明示的なクローズがない
+async def get_user(user_id: str):
+    session = async_session()  # クローズされないとコネクションリークの原因に
+    user = await session.get(User, user_id)
+    return user
+```
+
+**Q: 大量データ処理時のメモリ消費が多い**  
+A: ストリーム処理やページネーションを使用。一度に全データを読み込まない。
+
+```python
+# 悪い例 - 全レコードをメモリに読み込む
+def process_all_users():
+    users = db.query(User).all()  # 全ユーザーをメモリに読み込む
+    for user in users:
+        process_user(user)
+
+# 良い例 - バッチ処理
+def process_all_users():
+    offset = 0
+    limit = 100
+    while True:
+        users = db.query(User).offset(offset).limit(limit).all()
+        if not users:
+            break
+        for user in users:
+            process_user(user)
+        offset += limit
+```
+
+### 7.3 インフラストラクチャ FAQ
+
+**Q: コンテナが予期せず終了する**  
+A: Dockerログを確認。メモリ制限、エラーハンドリング、クラッシュの原因を特定。
+
+**Q: CI/CDパイプラインが遅い**  
+A: キャッシュの使用を確認。不要なステップの削除。並列実行の検討。ビルドマトリックスの最適化。
+
+**Q: 環境間で動作が異なる**  
+A: 環境変数、依存関係バージョン、インフラストラクチャの違いを確認。環境間の一貫性を確保。

@@ -1,0 +1,439 @@
+---
+description: Git Operation Rules and Best Practices in MapStack Project
+globs: 
+alwaysApply: false
+---
+---
+title: Git管理ワークフロー
+description: MapStackプロジェクトにおけるGit運用ルールとベストプラクティス
+category: process
+importance: high
+last_updated: 2025-04-13
+---
+
+# Git管理ワークフロー
+
+## 1. ブランチ戦略
+
+### 1.1 ブランチモデル
+MapStackでは **GitHub Flow** をベースとしたブランチモデルを採用しています：
+
+```mermaid
+graph LR
+    F["feature/xxx<br>(機能開発)"] -->|マージ| D
+    B["bugfix/xxx<br>(バグ修正)"] -->|マージ| D
+    D["develop<br>(開発環境)"] -->|マージ| M["main<br>(本番環境)"]
+    H["hotfix/xxx<br>(緊急修正)"] -->|マージ| M
+```
+
+
+- **main**: 本番環境にデプロイされるコード（常に安定状態）
+- **develop**: 次のリリースに向けた開発ブランチ（開発環境でテスト済み）
+- **feature/xxx**: 新機能開発用ブランチ（developから分岐）
+- **bugfix/xxx**: バグ修正用ブランチ（developから分岐）
+- **hotfix/xxx**: 緊急のバグ修正（mainから分岐、mainとdevelopにマージ）
+
+### 1.2 ブランチ命名規則
+
+| ブランチタイプ | 命名パターン | 例 |
+|--------------|------------|-----|
+| 機能開発 | `feature/{issue-番号}-{簡潔な説明}` | `feature/42-user-avatar` |
+| バグ修正 | `bugfix/{issue-番号}-{簡潔な説明}` | `bugfix/57-login-error` |
+| 緊急修正 | `hotfix/{issue-番号}-{簡潔な説明}` | `hotfix/99-security-patch` |
+| リファクタリング | `refactor/{issue-番号}-{簡潔な説明}` | `refactor/65-optimize-queries` |
+| ドキュメント | `docs/{簡潔な説明}` | `docs/api-documentation` |
+
+- ブランチ名は英語で、小文字とハイフンを使用
+- 機能やバグの内容が分かる簡潔な説明を含める
+- 関連するIssue番号がある場合は含める
+
+### 1.3 保護ブランチの設定
+**main**ブランチと**develop**ブランチは保護設定を行い、以下の制約を適用します：
+
+- 直接プッシュの禁止
+- プルリクエスト（PR）からのマージのみ許可
+- PRのマージには最低1名の承認が必要
+- すべてのCI/CDチェックが成功する必要あり
+- mainへのマージはdevelopからのみ（緊急時のhotfixを除く）
+
+## 2. コミットルール
+
+### 2.1 コミットメッセージの形式
+
+```
+<type>(<scope>): <subject>
+
+<body>
+
+<footer>
+```
+
+#### タイプ(type):
+- **feat**: 新機能追加
+- **fix**: バグ修正
+- **docs**: ドキュメントのみの変更
+- **style**: コードの意味に影響しない変更（空白、フォーマット、セミコロン追加など）
+- **refactor**: バグ修正や機能追加を含まないコードの変更
+- **perf**: パフォーマンス向上のための変更
+- **test**: テストの追加・修正
+- **chore**: ビルドプロセスやツールの変更、ライブラリの更新など
+
+#### スコープ(scope):
+変更の範囲を示す（オプション）。例：auth, profile, api
+
+#### 件名(subject):
+- 50文字以下で、変更内容を簡潔に説明
+- 命令形の現在形で記述（"added"ではなく"add"）
+- 最初の文字は小文字
+- 末尾にピリオドを付けない
+
+#### 本文(body)（オプション）:
+- 変更の詳細な説明
+- 変更理由の説明
+- 前の動作との対比
+
+#### フッター(footer)（オプション）:
+- 破壊的変更の場合、`BREAKING CHANGE:`を含める
+- Issue参照（`Fixes #123`、`Closes #456`など）
+
+### 2.2 コミットメッセージの例
+
+```
+feat(auth): add multi-factor authentication
+
+Implement time-based one-time password (TOTP) as an additional
+authentication method. Users can now set up MFA via their profile settings.
+
+Closes #42
+```
+
+```
+fix(api): resolve timeout issue in data processing endpoint
+
+Increased the timeout limit and added request chunking to handle
+large data sets more efficiently.
+
+Fixes #57
+```
+
+### 2.3 コミットのベストプラクティス
+- **小さく、頻繁にコミット**: 論理的な単位でコミットを分ける
+- **一貫性**: コミットルールに従った一貫したメッセージ
+- **テスト**: コミット前にコードが正常に動作することを確認
+- **秘密情報なし**: パスワード、APIキーなどの機密情報をコミットしない
+- **リベース**: 適切な場合はインタラクティブリベースを使用して履歴を整理
+
+## 3. Pull Request (PR) 管理
+
+### 3.1 PRの作成タイミング
+- 機能実装の完了時
+- バグ修正の完了時
+- リファクタリングの完了時
+- レビューを受けたい実装の段階で（WIP PRも可）
+
+### 3.2 PRのサイズと粒度
+- **理想的なPRサイズ**: 300-500行の変更
+- **最大PRサイズ**: 1000行以下を目標に
+- 大きな機能は複数のPRに分割
+- 1つのPRは1つの論理的な変更に集中
+
+### 3.3 PRのライフサイクル
+1. ブランチ作成とコード実装
+2. PR作成（テンプレートに従って）
+3. CIチェックの実行と確認
+4. コードレビューと修正
+5. 最終承認
+6. マージ
+7. ブランチ削除
+
+### 3.4 PR作成のチェックリスト
+- [ ] ブランチは最新の`develop`（または`main`）から作成されたか
+- [ ] 自己レビューを実施したか
+- [ ] テストは追加/更新されているか
+- [ ] CIチェックが通過しているか
+- [ ] コーディング規約に準拠しているか
+- [ ] ドキュメントが更新されているか
+- [ ] PRの説明は十分か
+
+## 4. Issue管理
+
+### 4.1 Issue作成のガイドライン
+- タイトルは簡潔かつ具体的に
+- 説明には再現手順（バグの場合）や機能詳細を含める
+- スクリーンショットや動画があれば添付
+- 関連するIssueやPRへのリンクを含める
+- 適切なラベルと担当者を設定
+
+### 4.2 Issueテンプレート
+
+**バグレポート**
+```markdown
+## バグの説明
+<!-- バグの明確で簡潔な説明 -->
+
+## 再現手順
+1. '...' に移動
+2. '....' をクリック
+3. '....' までスクロール
+4. エラーを確認
+
+## 期待される動作
+<!-- 期待される正しい動作の説明 -->
+
+## スクリーンショット
+<!-- 該当する場合、問題の理解に役立つスクリーンショットを追加 -->
+
+## 環境情報
+ - OS: [例: iOS]
+ - ブラウザ: [例: chrome, safari]
+ - バージョン: [例: 22]
+
+## 追加情報
+<!-- その他の情報があれば -->
+```
+
+**機能リクエスト**
+```markdown
+## 関連する問題
+<!-- この機能リクエストに関連する問題の説明 -->
+
+## 提案する解決策
+<!-- 実現したい内容の明確で簡潔な説明 -->
+
+## 代替案
+<!-- 検討した代替案や機能の説明 -->
+
+## 追加情報
+<!-- その他の情報やスクリーンショット -->
+```
+
+### 4.3 Issueのラベル体系
+
+| ラベル | 説明 |
+|-------|-----|
+| `bug` | バグ報告 |
+| `feature` | 新機能リクエスト |
+| `enhancement` | 既存機能の改善 |
+| `documentation` | ドキュメントの追加・修正 |
+| `frontend` | フロントエンド関連 |
+| `backend` | バックエンド関連 |
+| `database` | データベース関連 |
+| `security` | セキュリティ関連 |
+| `performance` | パフォーマンス関連 |
+| `priority:high` | 高優先度 |
+| `priority:medium` | 中優先度 |
+| `priority:low` | 低優先度 |
+| `good first issue` | 初心者向け |
+| `help wanted` | 協力募集中 |
+
+## 5. リリース管理
+
+### 5.1 バージョニングルール
+セマンティックバージョニング（SemVer）を採用します：
+
+```
+MAJOR.MINOR.PATCH
+```
+
+- **MAJOR**: 後方互換性のない変更
+- **MINOR**: 後方互換性のある機能追加
+- **PATCH**: 後方互換性のあるバグ修正
+
+例: `1.2.3`
+
+### 5.2 リリースプロセス
+1. リリース候補ブランチの作成（`release/v1.2.0`）
+2. 最終テストと品質確認
+3. リリースノートの作成
+4. `main`へのマージとタグ付け
+5. 本番環境へのデプロイ
+6. `develop`へのマージ（リリース変更を反映）
+
+### 5.3 リリースノートの作成
+
+```markdown
+# リリース v1.2.0 (2023-03-15)
+
+## 🚀 新機能
+- ユーザープロフィールにアバター設定機能を追加 (#42)
+- ダッシュボードに新しいデータビジュアライゼーションを追加 (#45)
+
+## 🐛 バグ修正
+- ログイン画面でのパスワードリセットリンクが機能しない問題を修正 (#57)
+- モバイル表示時のナビゲーションメニューの表示問題を修正 (#58)
+
+## 🔧 改善
+- API応答時間を50%改善 (#48)
+- ダークモードの色コントラストを調整 (#52)
+
+## 📝 その他
+- 依存パッケージの更新
+- ドキュメントの拡充
+```
+
+## 6. Git Tips & Tricks
+
+### 6.1 有用なGitコマンド
+
+```bash
+# 変更の一部だけをコミット
+git add -p
+
+# 直前のコミットメッセージを修正
+git commit --amend
+
+# 複数のコミットを1つに統合
+git rebase -i HEAD~3
+
+# 特定のファイルの変更履歴を確認
+git log -p -- path/to/file
+
+# ブランチ間の差分を確認
+git diff branch1..branch2
+
+# コミットされていない変更を一時保存
+git stash
+git stash pop
+
+# リモートブランチを追跡するローカルブランチを作成
+git checkout -b feature/new-feature origin/feature/new-feature
+
+# コミット履歴をグラフィカルに表示
+git log --graph --oneline --all --decorate
+```
+
+### 6.2 マージコンフリクトの解決
+1. コンフリクトのあるファイルを特定
+   ```bash
+   git status
+   ```
+
+2. コンフリクトマーカーがあるファイルを編集
+   ```
+   <<<<<<< HEAD
+   現在のブランチのコード
+   =======
+   マージするブランチのコード
+   >>>>>>> feature/branch
+   ```
+
+3. コンフリクトを解決したらファイルを追加
+   ```bash
+   git add resolved-file.txt
+   ```
+
+4. マージを完了
+   ```bash
+   git commit
+   ```
+
+### 6.3 .gitignoreの設定
+
+```
+# IDE・エディタ関連
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+
+# 依存関係
+node_modules/
+venv/
+__pycache__/
+*.py[cod]
+
+# ビルド成果物
+/dist
+/build
+*.bundle.js
+
+# ログ
+*.log
+npm-debug.log*
+
+# 環境設定
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# システムファイル
+.DS_Store
+Thumbs.db
+
+# テスト関連
+/coverage
+
+# その他
+*.bak
+*.swp
+*.swo
+```
+
+### 6.4 Git Hooks
+コミット前にリンターとテストを実行するためのpre-commitフック例:
+
+```bash
+#!/bin/bash
+# .git/hooks/pre-commit (または.husky/pre-commit)
+
+# フロントエンドのリントとテスト
+cd frontend
+npm run lint
+npm run test:quick
+
+# バックエンドのリントとテスト
+cd ../backend
+flake8 .
+pytest -xvs tests/unit
+
+# 終了コードを返す
+if [ $? -ne 0 ]; then
+  echo "テストまたはリントに失敗しました。コミットを中止します。"
+  exit 1
+fi
+```
+
+## 7. トラブルシューティング
+
+### 7.1 一般的な問題と解決策
+
+**問題**: コミットしたくないファイルが誤ってステージングされた
+**解決策**:
+```bash
+git reset HEAD <file>
+```
+
+**問題**: 直前のコミットを取り消したい
+**解決策**:
+```bash
+git reset --soft HEAD^
+```
+
+**問題**: 変更を破棄して最新のコミットに戻したい
+**解決策**:
+```bash
+git checkout -- <file>
+```
+
+**問題**: マージを中止したい
+**解決策**:
+```bash
+git merge --abort
+```
+
+**問題**: リモートブランチを強制的に更新
+**解決策**:
+```bash
+# 注意: 他の開発者に影響がある場合があります
+git push --force-with-lease origin <branch>
+```
+
+### 7.2 Git操作のベストプラクティス
+- コミット前に `git diff --staged` で変更を確認
+- リモートの変更を定期的に取り込む (`git pull --rebase`)
+- 作業開始前に最新の状態に更新
+- 複雑な操作の前にブランチをバックアップ
+- GitHub UI や GitKraken などの視覚的ツールを活用
+- Git LFS を使用して大きなファイルを管理

@@ -1,0 +1,466 @@
+---
+description: Python Code Design Principles and Implementation Guidelines in MapStack
+globs: 
+alwaysApply: false
+---
+---
+title: Python コーディング規約
+description: MapStackにおけるPythonコードの設計原則と実装規約
+category: backend
+importance: high
+last_updated: 2025-04-13
+---
+
+# Python コーディング規約
+
+## 1. 基本原則
+
+### 1.1 PEP 8 ガイドライン
+- [PEP 8](mdc:https:/pep8.org)に準拠したコードを記述
+- コードの可読性と一貫性を最重視
+- 例外がある場合は理由をコメントで説明
+
+### 1.2 主要なスタイルルール
+- インデントは4スペース（タブは使用しない）
+- 行の最大長は100文字
+- 関数間は2行空ける
+- クラス内のメソッド間は1行空ける
+- インポートは標準ライブラリ、サードパーティ、ローカルアプリの順に記述
+- `imports`の記述順序は以下に従う：
+  ```python
+  # 標準ライブラリ
+  import os
+  import sys
+  from datetime import datetime
+  
+  # サードパーティライブラリ
+  import fastapi
+  import sqlalchemy
+  import pydantic
+  
+  # ローカルアプリケーション
+  from app.core import config
+  from app.models import user
+  from app.services import auth_service
+  ```
+
+## 2. 命名規則
+
+### 2.1 基本的な命名規約
+```python
+# 変数、関数、メソッド: スネークケース
+user_name = "John"
+def get_user_data():
+    pass
+
+# クラス: パスカルケース
+class UserProfile:
+    pass
+
+# 定数: 大文字スネークケース
+MAX_RETRY_COUNT = 5
+API_BASE_URL = "https://api.example.com"
+
+# モジュール: スネークケース
+# user_service.py, auth_utils.py
+
+# パッケージ: スネークケース
+# core, services, models
+```
+
+### 2.2 命名の詳細ルール
+- **ブール変数**: `is_`, `has_`, `can_`などのプレフィックスを使用
+  ```python
+  is_active = True
+  has_permission = False
+  can_edit = True
+  ```
+- **関数**: 動詞または動詞＋名詞の形式
+  ```python
+  def get_user():
+      pass
+  
+  def validate_email():
+      pass
+  
+  def calculate_total_price():
+      pass
+  ```
+- **クラス**: 明確で具体的な名詞
+  ```python
+  class UserRepository:
+      pass
+  
+  class PaymentProcessor:
+      pass
+  ```
+- **例外クラス**: 接尾辞に`Error`または`Exception`を使用
+  ```python
+  class ValidationError(Exception):
+      pass
+  
+  class ResourceNotFoundException(Exception):
+      pass
+  ```
+
+## 3. ドキュメンテーション
+
+### 3.1 Docstring
+- すべてのモジュール、クラス、関数にDocstringを記述
+- Google形式のDocstringを使用
+- 型ヒントと併用
+
+```python
+def get_user_by_id(user_id: str) -> Optional[User]:
+    """指定されたIDのユーザーを取得する。
+
+    Args:
+        user_id: 取得するユーザーのID
+
+    Returns:
+        User: 見つかった場合はUserオブジェクト
+        None: ユーザーが見つからない場合
+
+    Raises:
+        ValueError: user_idが空の場合
+    """
+    if not user_id:
+        raise ValueError("user_id must not be empty")
+    
+    return db.query(User).filter(User.id == user_id).first()
+```
+
+### 3.2 コメント
+- 複雑なロジックや非直感的なコードには説明コメントを追加
+- TODOコメントには担当者と課題番号を記載
+  ```python
+  # TODO(username): キャッシュ機能の実装 (#123)
+  ```
+- コメントは常に最新の状態を維持
+
+## 4. 型ヒント
+
+### 4.1 基本的な型ヒント
+```python
+def greet(name: str) -> str:
+    return f"Hello, {name}!"
+
+def get_users(limit: int = 10, active_only: bool = True) -> List[User]:
+    query = db.query(User)
+    if active_only:
+        query = query.filter(User.is_active == True)
+    return query.limit(limit).all()
+```
+
+### 4.2 複雑な型ヒント
+```python
+from typing import Dict, List, Optional, Union, Callable, TypeVar, Generic
+
+# ジェネリック型
+T = TypeVar('T')
+U = TypeVar('U')
+
+def process_items(items: List[T]) -> Dict[str, T]:
+    result: Dict[str, T] = {}
+    for item in items:
+        result[str(item)] = item
+    return result
+
+# コールバック関数
+def apply_function(func: Callable[[T], U], value: T) -> U:
+    return func(value)
+
+# 複合型
+def get_config(key: str) -> Optional[Union[str, int, bool, Dict[str, Any]]]:
+    return config.get(key)
+```
+
+### 4.3 型エイリアス
+```python
+from typing import Dict, List, TypedDict
+
+# 型エイリアス
+UserId = str
+UserMap = Dict[UserId, User]
+
+# TypedDict（構造化された辞書）
+class UserDict(TypedDict):
+    id: str
+    name: str
+    email: str
+    age: int
+    is_active: bool
+
+def process_user_data(user_data: UserDict) -> User:
+    # 処理ロジック
+    return User(**user_data)
+```
+
+## 5. コード構成
+
+### 5.1 モジュール構成
+- 一つのモジュールは一つの責任を持つ
+- モジュールサイズは500行以内を目標
+- 関連する関数やクラスは同じモジュールに配置
+
+### 5.2 関数設計
+- 関数は一つのタスクのみを行う
+- 関数の長さは50行以内を目標
+- 引数は5つ以下に制限
+- 複雑な引数セットは専用のクラスやデータクラスに抽出
+
+```python
+# 良くない例
+def process_order(
+    user_id, 
+    product_ids, 
+    quantities, 
+    payment_method, 
+    shipping_address, 
+    billing_address, 
+    promo_code
+):
+    # 長い処理...
+
+# 良い例
+@dataclass
+class OrderData:
+    user_id: str
+    product_ids: List[str]
+    quantities: List[int]
+    payment_method: str
+    shipping_address: Address
+    billing_address: Optional[Address] = None
+    promo_code: Optional[str] = None
+
+def process_order(order_data: OrderData):
+    # 処理...
+```
+
+## 6. エラーハンドリング
+
+### 6.1 例外の使用
+- 適切なタイミングで例外を発生させる
+- 具体的な例外クラスを使用する
+- 例外は常にキャッチする
+- ビジネスロジックエラーには独自の例外クラスを定義
+
+```python
+def divide(a: float, b: float) -> float:
+    """2つの数値を除算する。
+
+    Args:
+        a: 被除数
+        b: 除数
+
+    Returns:
+        除算結果
+
+    Raises:
+        ValueError: 除数がゼロの場合
+    """
+    if b == 0:
+        raise ValueError("Cannot divide by zero")
+    return a / b
+
+# 呼び出し側のエラーハンドリング
+try:
+    result = divide(10, user_input)
+except ValueError as e:
+    logger.error(f"除算エラー: {str(e)}")
+    # エラー処理
+```
+
+### 6.2 例外階層
+```python
+# 基底例外クラス
+class AppError(Exception):
+    """アプリケーション固有のエラーの基底クラス"""
+
+# 入力検証エラー
+class ValidationError(AppError):
+    """入力データの検証エラー"""
+
+# リソースエラー
+class ResourceError(AppError):
+    """リソース操作に関連するエラー"""
+
+class ResourceNotFoundError(ResourceError):
+    """リソースが見つからないエラー"""
+
+class ResourceAlreadyExistsError(ResourceError):
+    """リソースが既に存在するエラー"""
+```
+
+## 7. テスト
+
+### 7.1 ユニットテスト
+- すべての公開関数とメソッドにユニットテストを作成
+- `pytest`フレームワークを使用
+- テストファイル名は`test_`で始める
+- テスト関数名も`test_`で始める
+
+```python
+# test_user_service.py
+def test_get_user_by_id_returns_user_when_exists():
+    # 準備
+    test_user = User(id="test-id", name="Test User")
+    db_session.add(test_user)
+    db_session.commit()
+    
+    # 実行
+    result = user_service.get_user_by_id("test-id")
+    
+    # 検証
+    assert result is not None
+    assert result.id == "test-id"
+    assert result.name == "Test User"
+
+def test_get_user_by_id_returns_none_when_not_exists():
+    # 実行
+    result = user_service.get_user_by_id("non-existent-id")
+    
+    # 検証
+    assert result is None
+```
+
+### 7.2 テストフィクスチャ
+```python
+import pytest
+from app.db.session import SessionLocal
+from app.models.user import User
+
+@pytest.fixture
+def db_session():
+    """テスト用DBセッション"""
+    session = SessionLocal()
+    try:
+        yield session
+    finally:
+        session.rollback()
+        session.close()
+
+@pytest.fixture
+def test_user(db_session):
+    """テスト用ユーザー"""
+    user = User(
+        id="test-user-id",
+        email="test@example.com",
+        name="Test User",
+        hashed_password="hashed_password"
+    )
+    db_session.add(user)
+    db_session.commit()
+    
+    yield user
+    
+    # クリーンアップ
+    db_session.delete(user)
+    db_session.commit()
+```
+
+## 8. パフォーマンス
+
+### 8.1 一般的なパフォーマンス最適化
+- リストより辞書を使用する（ルックアップが頻繁な場合）
+- 大量のデータには生成器を使用
+- 文字列連結には`join`を使用
+
+```python
+# 悪い例 - リストの反復検索
+def find_user(users, user_id):
+    for user in users:
+        if user.id == user_id:
+            return user
+    return None
+
+# 良い例 - 辞書によるルックアップ
+def create_user_map(users):
+    return {user.id: user for user in users}
+
+user_map = create_user_map(users)
+user = user_map.get(user_id)
+
+# 悪い例 - メモリを大量消費
+def process_large_file(filename):
+    with open(filename) as f:
+        lines = f.readlines()  # 全行をメモリに読み込む
+    
+    for line in lines:
+        process_line(line)
+
+# 良い例 - 生成器を使用
+def process_large_file(filename):
+    with open(filename) as f:
+        for line in f:  # 1行ずつ処理
+            process_line(line)
+```
+
+### 8.2 コード最適化
+- プロファイリングに基づいて最適化
+- ホットスポットのみを最適化
+- 可読性と保守性を犠牲にしない
+
+```python
+import cProfile
+import pstats
+
+def profile_function(func):
+    """関数のプロファイリングを行うデコレータ"""
+    def wrapper(*args, **kwargs):
+        profiler = cProfile.Profile()
+        profiler.enable()
+        result = func(*args, **kwargs)
+        profiler.disable()
+        
+        stats = pstats.Stats(profiler).sort_stats('cumtime')
+        stats.print_stats(10)  # 上位10件のみ表示
+        
+        return result
+    return wrapper
+
+@profile_function
+def expensive_function():
+    # 処理
+    pass
+```
+
+## 9. セキュリティ
+
+### 9.1 一般的なセキュリティガイドライン
+- シークレット情報はコードに埋め込まない
+- 環境変数または専用の設定ファイルを使用
+- 外部入力は常に検証する
+- SQLインジェクションを防止する（ORMまたはパラメータ化クエリを使用）
+
+```python
+# 悪い例
+connection_string = "postgresql://user:password@localhost/db"
+
+# 良い例
+from app.core.config import settings
+connection_string = settings.DATABASE_URI
+```
+
+### 9.2 パスワード処理
+```python
+import secrets
+import string
+from passlib.context import CryptContext
+
+# パスワードハッシュ用のコンテキスト
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+def hash_password(password: str) -> str:
+    """パスワードをハッシュ化する"""
+    return pwd_context.hash(password)
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """パスワードを検証する"""
+    return pwd_context.verify(plain_password, hashed_password)
+
+def generate_secure_password(length: int = 12) -> str:
+    """安全なランダムパスワードを生成する"""
+    alphabet = string.ascii_letters + string.digits + string.punctuation
+    return ''.join(secrets.choice(alphabet) for _ in range(length))
+```

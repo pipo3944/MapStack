@@ -1,0 +1,503 @@
+---
+description: Frontend Testing Implementation Strategy and Practices in MapStack
+globs: 
+alwaysApply: false
+---
+---
+title: フロントエンドテスト戦略
+description: MapStackにおけるフロントエンドのテスト実装方針と実践
+category: frontend
+importance: high
+last_updated: 2025-04-13
+---
+
+# フロントエンドテスト戦略
+
+## 1. テスト階層と方針
+
+### 1.1 テストピラミッド
+フロントエンドのテストは以下の階層に従って実装します：
+
+```mermaid
+block-beta
+columns 6
+    space:2 c["E2E<br>10%（重要なユーザーフロー）"]:2 space:2
+    space:1 b["統合テスト<br>30%（コンポーネント結合）"]:4 space:1
+    a["ユニットテスト<br>60%（個別機能）"]:6
+```
+
+### 1.2 テスト対象とカバレッジ要件
+- **ユーティリティ関数**: 90%以上
+- **共通コンポーネント**: 80%以上
+- **ページコンポーネント**: 70%以上
+- **ストア（Zustand）**: 85%以上
+
+### 1.3 テストツールセット
+- **ユニットテスト**: Jest
+- **コンポーネントテスト**: React Testing Library
+- **E2Eテスト**: Playwright
+- **カバレッジ計測**: Jest内蔵のカバレッジツール
+
+## 2. ユニットテスト
+
+### 2.1 テスト対象
+- ユーティリティ関数
+- カスタムフック
+- ヘルパー関数
+- ストア関数（セレクタ、アクション）
+
+### 2.2 Jestでのユニットテスト実装
+
+```typescript
+// dateUtils.ts
+export const formatDate = (date: Date): string => {
+  return new Intl.DateTimeFormat('ja-JP', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  }).format(date);
+};
+
+// dateUtils.test.ts
+import { formatDate } from './dateUtils';
+
+describe('formatDate', () => {
+  it('日付を日本語形式でフォーマットする', () => {
+    const date = new Date(2023, 0, 15); // 2023年1月15日
+    expect(formatDate(date)).toBe('2023年1月15日');
+  });
+  
+  it('別の日付も正しくフォーマットする', () => {
+    const date = new Date(2023, 11, 31); // 2023年12月31日
+    expect(formatDate(date)).toBe('2023年12月31日');
+  });
+});
+```
+
+### 2.3 カスタムフックのテスト
+
+```typescript
+// useCounter.ts
+import { useState } from 'react';
+
+export function useCounter(initialValue = 0) {
+  const [count, setCount] = useState(initialValue);
+  
+  const increment = () => setCount(prev => prev + 1);
+  const decrement = () => setCount(prev => prev - 1);
+  const reset = () => setCount(initialValue);
+  
+  return { count, increment, decrement, reset };
+}
+
+// useCounter.test.ts
+import { renderHook, act } from '@testing-library/react-hooks';
+import { useCounter } from './useCounter';
+
+describe('useCounter', () => {
+  it('初期値を正しく設定する', () => {
+    const { result } = renderHook(() => useCounter(10));
+    expect(result.current.count).toBe(10);
+  });
+  
+  it('incrementで値が増加する', () => {
+    const { result } = renderHook(() => useCounter(0));
+    act(() => {
+      result.current.increment();
+    });
+    expect(result.current.count).toBe(1);
+  });
+  
+  it('decrementで値が減少する', () => {
+    const { result } = renderHook(() => useCounter(10));
+    act(() => {
+      result.current.decrement();
+    });
+    expect(result.current.count).toBe(9);
+  });
+  
+  it('resetで初期値に戻る', () => {
+    const { result } = renderHook(() => useCounter(5));
+    act(() => {
+      result.current.increment();
+      result.current.increment();
+      result.current.reset();
+    });
+    expect(result.current.count).toBe(5);
+  });
+});
+```
+
+## 3. コンポーネントテスト
+
+### 3.1 テスト対象
+- 共通UIコンポーネント（Button, Card等）
+- 機能コンポーネント（Form, List等）
+- コンテナコンポーネント（状態を持つコンポーネント）
+- ページコンポーネント
+
+### 3.2 React Testing Libraryの使用原則
+- DOM要素の取得には、アクセシビリティを考慮した以下の優先順位で使用：
+  1. `getByRole` - 最優先（アクセシビリティ対応）
+  2. `getByLabelText` - フォーム要素で有用
+  3. `getByText` - 表示テキストで要素を見つける
+  4. `getByTestId` - 最終手段として使用
+
+- ユーザー操作のシミュレーションには `userEvent` を使用
+
+### 3.3 コンポーネントテストの例
+
+```tsx
+// Button.tsx
+import React from 'react';
+
+interface ButtonProps {
+  variant?: 'primary' | 'secondary' | 'danger';
+  size?: 'small' | 'medium' | 'large';
+  label: string;
+  onClick?: () => void;
+  disabled?: boolean;
+}
+
+export const Button: React.FC<ButtonProps> = ({
+  variant = 'primary',
+  size = 'medium',
+  label,
+  onClick,
+  disabled = false
+}) => {
+  return (
+    <button
+      className={`btn btn-${variant} btn-${size}`}
+      onClick={onClick}
+      disabled={disabled}
+    >
+      {label}
+    </button>
+  );
+};
+
+// Button.test.tsx
+import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { Button } from './Button';
+
+describe('Button', () => {
+  it('指定されたラベルを表示する', () => {
+    render(<Button label="テストボタン" />);
+    expect(screen.getByRole('button', { name: /テストボタン/i })).toBeInTheDocument();
+  });
+  
+  it('クリックハンドラが呼ばれる', async () => {
+    const handleClick = jest.fn();
+    render(<Button label="クリックして" onClick={handleClick} />);
+    
+    await userEvent.click(screen.getByRole('button'));
+    expect(handleClick).toHaveBeenCalledTimes(1);
+  });
+  
+  it('無効化されたボタンはクリックできない', async () => {
+    const handleClick = jest.fn();
+    render(<Button label="無効ボタン" onClick={handleClick} disabled />);
+    
+    const button = screen.getByRole('button');
+    expect(button).toBeDisabled();
+    
+    await userEvent.click(button);
+    expect(handleClick).not.toHaveBeenCalled();
+  });
+  
+  it('指定されたクラスが適用される', () => {
+    render(<Button label="スタイル確認" variant="danger" size="large" />);
+    const button = screen.getByRole('button');
+    
+    expect(button).toHaveClass('btn');
+    expect(button).toHaveClass('btn-danger');
+    expect(button).toHaveClass('btn-large');
+  });
+});
+```
+
+### 3.4 状態が関連するコンポーネントのテスト
+
+```tsx
+// Zustandストアを使用したコンポーネントテスト
+import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { UserProfile } from './UserProfile';
+import { useUserStore } from '../../store/userStore';
+
+// ストアをモック
+jest.mock('../../store/userStore');
+
+describe('UserProfile', () => {
+  const mockUser = {
+    id: '123',
+    name: 'テストユーザー',
+    email: 'test@example.com'
+  };
+  
+  beforeEach(() => {
+    // モックストアの設定
+    (useUserStore as jest.Mock).mockReturnValue({
+      user: mockUser,
+      updateProfile: jest.fn()
+    });
+  });
+  
+  it('ユーザー情報が表示される', () => {
+    render(<UserProfile />);
+    
+    expect(screen.getByText('テストユーザー')).toBeInTheDocument();
+    expect(screen.getByText('test@example.com')).toBeInTheDocument();
+  });
+  
+  it('プロフィール更新が呼び出される', async () => {
+    const mockUpdateProfile = jest.fn();
+    (useUserStore as jest.Mock).mockReturnValue({
+      user: mockUser,
+      updateProfile: mockUpdateProfile
+    });
+    
+    render(<UserProfile />);
+    
+    // 名前の入力欄を検索
+    const nameInput = screen.getByLabelText(/名前/i);
+    await userEvent.clear(nameInput);
+    await userEvent.type(nameInput, '新しい名前');
+    
+    // 保存ボタンをクリック
+    await userEvent.click(screen.getByRole('button', { name: /保存/i }));
+    
+    // updateProfileが正しいパラメータで呼ばれたか確認
+    expect(mockUpdateProfile).toHaveBeenCalledWith(
+      expect.objectContaining({ name: '新しい名前' })
+    );
+  });
+});
+```
+
+## 4. 統合テスト
+
+### 4.1 テスト対象
+- 複数コンポーネントの連携
+- ルーティングを含む処理
+- コンテキストプロバイダーとその消費者
+- APIリクエストとの統合
+
+### 4.2 モックの適切な使用
+- 外部依存（API等）はモックを使用
+- MSWを使用したモックサーバーでAPI応答をシミュレーション
+- 複雑な依存関係はmock factoryパターンで管理
+
+```tsx
+// APIをモックする統合テストの例
+import { rest } from 'msw';
+import { setupServer } from 'msw/node';
+import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { UserList } from './UserList';
+
+// モックサーバーの設定
+const server = setupServer(
+  rest.get('/api/users', (req, res, ctx) => {
+    return res(
+      ctx.json([
+        { id: '1', name: 'ユーザー1' },
+        { id: '2', name: 'ユーザー2' },
+        { id: '3', name: 'ユーザー3' },
+      ])
+    );
+  })
+);
+
+beforeAll(() => server.listen());
+afterEach(() => server.resetHandlers());
+afterAll(() => server.close());
+
+describe('UserList統合テスト', () => {
+  it('ユーザーリストが読み込まれ表示される', async () => {
+    render(<UserList />);
+    
+    // 最初はローディング状態を確認
+    expect(screen.getByText(/読み込み中/i)).toBeInTheDocument();
+    
+    // データが読み込まれたことを確認
+    await waitFor(() => {
+      expect(screen.getByText('ユーザー1')).toBeInTheDocument();
+      expect(screen.getByText('ユーザー2')).toBeInTheDocument();
+      expect(screen.getByText('ユーザー3')).toBeInTheDocument();
+    });
+  });
+  
+  it('エラー時にエラーメッセージを表示', async () => {
+    // エラーレスポンスのためにサーバーをオーバーライド
+    server.use(
+      rest.get('/api/users', (req, res, ctx) => {
+        return res(ctx.status(500), ctx.json({ error: 'サーバーエラー' }));
+      })
+    );
+    
+    render(<UserList />);
+    
+    await waitFor(() => {
+      expect(screen.getByText(/エラーが発生しました/i)).toBeInTheDocument();
+    });
+  });
+});
+```
+
+## 5. E2Eテスト
+
+### 5.1 テスト対象
+- クリティカルなユーザーフロー
+- フォームの入力から送信までの一連の流れ
+- 認証フロー
+- 複雑なユーザーインタラクション
+
+### 5.2 Playwrightでのテスト実装
+
+```typescript
+// auth.spec.ts
+import { test, expect } from '@playwright/test';
+
+test.describe('認証フロー', () => {
+  test('ユーザーがログインできる', async ({ page }) => {
+    // ログインページに移動
+    await page.goto('/login');
+    
+    // フォーム入力
+    await page.fill('input[name="email"]', 'test@example.com');
+    await page.fill('input[name="password"]', 'password123');
+    
+    // ログインボタンをクリック
+    await page.click('button[type="submit"]');
+    
+    // ダッシュボードにリダイレクトされたことを確認
+    await expect(page).toHaveURL('/dashboard');
+    
+    // ログイン成功メッセージを確認
+    await expect(page.locator('.welcome-message')).toContainText('ようこそ');
+  });
+  
+  test('無効な認証情報ではエラーが表示される', async ({ page }) => {
+    await page.goto('/login');
+    
+    await page.fill('input[name="email"]', 'test@example.com');
+    await page.fill('input[name="password"]', 'wrongpassword');
+    
+    await page.click('button[type="submit"]');
+    
+    // URLが変わらないことを確認
+    await expect(page).toHaveURL('/login');
+    
+    // エラーメッセージを確認
+    await expect(page.locator('.error-message')).toBeVisible();
+    await expect(page.locator('.error-message')).toContainText('認証に失敗しました');
+  });
+});
+```
+
+### 5.3 E2Eテストのベストプラクティス
+- テストデータの事前準備と後片付け
+- 環境依存しないテスト設計
+- スクリーンショットとビデオ記録の活用
+- CIパイプラインでの自動実行
+
+```typescript
+// CIでのE2Eテスト設定例
+// playwright.config.ts
+import { PlaywrightTestConfig } from '@playwright/test';
+
+const config: PlaywrightTestConfig = {
+  testDir: 'e2e',
+  timeout: 30000,
+  retries: 2,
+  use: {
+    baseURL: 'http://localhost:3000',
+    trace: 'on-first-retry', // トレース取得設定
+    screenshot: 'only-on-failure',
+    video: 'retain-on-failure',
+  },
+  projects: [
+    {
+      name: 'Chrome',
+      use: { browserName: 'chromium' },
+    },
+    {
+      name: 'Firefox',
+      use: { browserName: 'firefox' },
+    },
+    {
+      name: 'Safari',
+      use: { browserName: 'webkit' },
+    },
+  ],
+};
+
+export default config;
+```
+
+## 6. テストの実行と保守
+
+### 6.1 テスト実行手順
+- 開発中: `npm test`（変更監視モード）
+- 特定のテスト: `npm test -- -t "テスト名"`
+- カバレッジレポート: `npm test -- --coverage`
+- E2Eテスト: `npm run test:e2e`
+
+### 6.2 CI/CDでの自動テスト
+- プルリクエスト時の自動テスト実行
+- 定期的な全テスト実行（夜間ビルド）
+- テスト失敗時の通知設定
+
+```yaml
+# .github/workflows/test.yml
+name: テスト
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Node.jsのセットアップ
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+      - run: npm ci
+      - run: npm test -- --coverage
+      - name: カバレッジレポートのアップロード
+        uses: codecov/codecov-action@v3
+```
+
+### 6.3 テストメンテナンス
+- テストコードはプロダクションコードと同等の品質を維持
+- 定期的なテストの見直しとリファクタリング
+- フラキーテスト（不安定なテスト）の特定と修正
+- テストヘルパーとユーティリティの活用
+
+## 7. テストのベストプラクティス
+
+### 7.1 効果的なテスト設計
+- テストを機能仕様のドキュメントとして機能させる
+- 1テストにつき1つのアサーション（できるだけ）
+- テストコードの重複を避ける（テストヘルパーを活用）
+- AAA（Arrange-Act-Assert）パターンの活用
+
+### 7.2 テストの可読性向上
+- 明確なテスト命名（`it('should...')` よりも `it('does...')` を推奨）
+- データ生成のためのファクトリ関数の使用
+- スナップショットテストの適切な使用
+
+### 7.3 テストの原則
+- テスト駆動開発（TDD）を適宜活用
+- 実装の詳細ではなく、振る舞いをテスト
+- エンドユーザーの視点からのテスト
+- テストの信頼性を最優先（フラキーテストを許容しない）

@@ -1,0 +1,436 @@
+---
+description: Fundamental Software Development Principles and Their Application in MapStack
+globs: 
+alwaysApply: false
+---
+---
+title: コーディング原則
+description: MapStackにおけるソフトウェア開発の基本原則と適用方法
+category: common
+importance: high
+last_updated: 2025-04-13
+---
+
+# コーディング原則
+
+## 1. 基本原則
+
+### 1.1 DRY (Don't Repeat Yourself)
+同じコードや処理を繰り返し書かない原則です。
+
+**適用方法**:
+- 重複するコードは関数やクラスにまとめる
+- 共通ロジックはユーティリティ関数として抽出
+- 設定値は定数や設定ファイルに集約
+- コンポーネントやモジュールの再利用を促進
+
+```typescript
+// 悪い例: 重複コード
+function validateEmail(email: string): boolean {
+  const regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return regex.test(email);
+}
+
+function validateSignupForm(data: SignupData): boolean {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(data.email)) {
+    return false;
+  }
+  // 他のバリデーション...
+  return true;
+}
+
+// 良い例: 関数の再利用
+function validateEmail(email: string): boolean {
+  const regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return regex.test(email);
+}
+
+function validateSignupForm(data: SignupData): boolean {
+  if (!validateEmail(data.email)) {
+    return false;
+  }
+  // 他のバリデーション...
+  return true;
+}
+```
+
+### 1.2 KISS (Keep It Simple, Stupid)
+シンプルさを重視し、複雑な実装を避ける原則です。
+
+**適用方法**:
+- 最もシンプルな解決策を選ぶ
+- 不必要な機能や複雑さを排除
+- 1つの関数やクラスは1つの責任に集中
+- 理解しやすいコードを書く
+- 過度な抽象化を避ける
+
+```python
+# 悪い例: 過度に複雑
+def get_active_users(users, include_pending=False, exclude_internal=True, 
+                     sort_by="created_at", sort_order="desc", 
+                     limit=100, include_details=False):
+    result = []
+    for user in users:
+        if user.status == "active" or (include_pending and user.status == "pending"):
+            if not (exclude_internal and user.is_internal):
+                if include_details:
+                    user_data = user.to_dict_with_details()
+                else:
+                    user_data = user.to_dict()
+                result.append(user_data)
+    
+    # ソートロジック...
+    # ここに複雑なソートコードが入る
+    
+    return result[:limit]
+
+# 良い例: シンプルな関数に分割
+def filter_users(users, include_pending=False, exclude_internal=True):
+    """ユーザーリストをフィルタリングする"""
+    for user in users:
+        if user.status != "active" and not (include_pending and user.status == "pending"):
+            continue
+        if exclude_internal and user.is_internal:
+            continue
+        yield user
+
+def get_user_data(user, include_details=False):
+    """ユーザーデータを辞書形式で返す"""
+    return user.to_dict_with_details() if include_details else user.to_dict()
+
+def get_active_users(users, **options):
+    """オプションに基づいてアクティブユーザーを取得する"""
+    filtered_users = filter_users(
+        users, 
+        include_pending=options.get("include_pending", False),
+        exclude_internal=options.get("exclude_internal", True)
+    )
+    
+    result = [get_user_data(user, options.get("include_details", False)) 
+              for user in filtered_users]
+    
+    sort_by = options.get("sort_by", "created_at")
+    sort_order = options.get("sort_order", "desc")
+    result.sort(key=lambda x: x[sort_by], reverse=(sort_order == "desc"))
+    
+    limit = options.get("limit", 100)
+    return result[:limit]
+```
+
+### 1.3 YAGNI (You Aren't Gonna Need It)
+必要になるまで機能を追加しない原則です。
+
+**適用方法**:
+- 現在必要ない機能は実装しない
+- 将来の拡張性のための過剰な設計を避ける
+- 具体的な要件に基づいて実装する
+- リファクタリングを恐れない
+- インクリメンタルな開発アプローチを採用
+
+```typescript
+// 悪い例: 不要な柔軟性
+interface UserConfig {
+  name: string;
+  email: string;
+  preferences: UserPreferences;
+  securitySettings: SecuritySettings;
+  subscriptions: Subscription[];
+  paymentMethods: PaymentMethod[];
+  integrations: ThirdPartyIntegration[];
+  // ... その他多数のオプション
+}
+
+// 良い例: 必要な機能のみ実装
+interface UserConfig {
+  name: string;
+  email: string;
+  preferences: UserPreferences;
+  // 他の機能は必要になった時点で追加
+}
+```
+
+### 1.4 単一責任の原則 (SRP)
+1つのクラスや関数は1つの責任のみを持つべきという原則です。
+
+**適用方法**:
+- 各クラスや関数は明確に定義された1つの目的に集中
+- 変更理由が1つだけになるようにコンポーネントを設計
+- 複数の責任を持つクラスは分割する
+- ヘルパー関数やユーティリティを適切に活用
+
+```typescript
+// 悪い例: 複数の責任
+class UserManager {
+  async createUser(userData: UserData) {
+    // ユーザーデータバリデーション
+    this.validateUserData(userData);
+    
+    // データベースへの保存
+    const user = await this.saveToDatabase(userData);
+    
+    // メール送信
+    await this.sendWelcomeEmail(user);
+    
+    // ログ記録
+    this.logUserCreation(user);
+    
+    return user;
+  }
+  
+  // 各メソッドの実装...
+}
+
+// 良い例: 責任の分離
+class UserValidator {
+  validate(userData: UserData): ValidationResult {
+    // バリデーションロジック
+  }
+}
+
+class UserRepository {
+  async save(userData: UserData): Promise<User> {
+    // データベース操作
+  }
+}
+
+class EmailService {
+  async sendWelcomeEmail(user: User): Promise<void> {
+    // メール送信ロジック
+  }
+}
+
+class UserService {
+  constructor(
+    private validator: UserValidator,
+    private repository: UserRepository,
+    private emailService: EmailService,
+    private logger: Logger
+  ) {}
+  
+  async createUser(userData: UserData): Promise<User> {
+    const validationResult = this.validator.validate(userData);
+    if (!validationResult.isValid) {
+      throw new ValidationError(validationResult.errors);
+    }
+    
+    const user = await this.repository.save(userData);
+    await this.emailService.sendWelcomeEmail(user);
+    this.logger.info(`User created: ${user.id}`);
+    
+    return user;
+  }
+}
+```
+
+## 2. コード品質原則
+
+### 2.1 保守性の原則
+コードは将来の変更や拡張を容易にするように書かれるべきです。
+
+**適用方法**:
+- 明確な命名規則を使用
+- コードの意図を分かりやすく表現
+- 適切なコメントで複雑なロジックを説明
+- モジュール間の依存関係を最小限に抑える
+- テストを書きやすいコードを設計
+
+### 2.2 コードの自己文書化
+コード自体が何をしているかを明確に伝えるべきです。
+
+**適用方法**:
+- 説明的な変数・関数・クラス名を使用
+- 一般的なデザインパターンを活用
+- マジックナンバーや文字列の代わりに定数を使用
+- 関数の引数と戻り値の型を明示
+- 複雑な処理は適切に分割してネーミングで意図を表現
+
+```typescript
+// 悪い例: 自己文書化されていない
+function process(d, t) {
+  const res = d.filter(i => i.s === "a" && new Date(i.ts) > t);
+  return res.map(i => {
+    return {
+      id: i.id,
+      val: i.val * 1.1
+    };
+  });
+}
+
+// 良い例: 自己文書化されている
+function getActiveItemsWithUpdatedValues(items, threshold) {
+  const activeItems = items.filter(item => 
+    item.status === "active" && 
+    new Date(item.timestamp) > threshold
+  );
+  
+  return activeItems.map(item => ({
+    id: item.id,
+    value: applyValueIncrement(item.value)
+  }));
+}
+
+function applyValueIncrement(value) {
+  const INCREMENT_FACTOR = 1.1;
+  return value * INCREMENT_FACTOR;
+}
+```
+
+### 2.3 予測可能性の原則
+コードの動作は予測可能で一貫性があるべきです。
+
+**適用方法**:
+- 一貫した命名と構造化を行う
+- 関数やメソッドの副作用を明確にする
+- 純粋関数を優先して使用
+- エラー処理を一貫した方法で実装
+- 適切な例外処理を行う
+
+```python
+# 悪い例: 予測できない動作
+def update_user(user_id, data):
+    user = db.find_user(user_id)
+    if user:
+        for key, value in data.items():
+            setattr(user, key, value)
+        # 暗黙的に全ユーザーのキャッシュをクリア
+        cache.clear_all_users()  
+        # グローバル変数を変更
+        global last_updated_user_id
+        last_updated_user_id = user_id
+        return db.save(user)
+    return None
+
+# 良い例: 予測可能な動作
+def update_user(user_id, data):
+    """
+    ユーザー情報を更新する
+    
+    Args:
+        user_id: 更新対象のユーザーID
+        data: 更新するフィールドと値の辞書
+        
+    Returns:
+        更新されたユーザーオブジェクト、ユーザーが見つからない場合はNone
+        
+    Raises:
+        ValidationError: データが無効な場合
+    """
+    user = db.find_user(user_id)
+    if not user:
+        return None
+        
+    # 更新前にバリデーション
+    validate_user_data(data)
+    
+    # 更新可能なフィールドを明示的に指定
+    allowed_fields = ['name', 'email', 'preferences']
+    for key in allowed_fields:
+        if key in data:
+            setattr(user, key, data[key])
+    
+    updated_user = db.save(user)
+    
+    # キャッシュ操作を明示的に実行
+    cache.invalidate_user(user_id)
+    
+    return updated_user
+```
+
+## 3. エンジニアリング原則
+
+### 3.1 適切な抽象化
+問題を適切なレベルで抽象化することで複雑さを管理します。
+
+**適用方法**:
+- ビジネスドメインに合わせた抽象化
+- インターフェースと実装の分離
+- 共通の振る舞いをパターン化
+- 過度な抽象化を避ける
+- 抽象化は実際のユースケースに基づいて行う
+
+### 3.2 プログラミングインターフェースの一貫性
+APIやインターフェースは一貫したデザインパターンに従うべきです。
+
+**適用方法**:
+- 一貫した命名規則を使用
+- 関数シグネチャの一貫性を維持
+- エラー処理パターンを統一
+- 同様の機能には同様のインターフェースを提供
+- インターフェース変更時は互換性を考慮
+
+```typescript
+// 悪い例: 一貫性のないインターフェース
+interface UserService {
+  getUser(id: string): Promise<User>;
+  createNewAccount(userData: UserData): Promise<User>;
+  delete(userId: string): Promise<boolean>;
+  updateUserInfo(id: string, data: Partial<UserData>): Promise<User>;
+}
+
+// 良い例: 一貫したインターフェース
+interface UserService {
+  getUser(id: string): Promise<User>;
+  createUser(userData: UserData): Promise<User>;
+  deleteUser(id: string): Promise<boolean>;
+  updateUser(id: string, userData: Partial<UserData>): Promise<User>;
+}
+```
+
+### 3.3 テスト駆動開発 (TDD)
+テストを先に書いてからコードを実装することで品質を確保します。
+
+**適用方法**:
+- 要件を理解したらテストを先に書く
+- 小さな単位でテスト→実装→リファクタリングのサイクルを繰り返す
+- エッジケースもテストでカバー
+- テストはドキュメントとしても機能させる
+- CI/CDパイプラインにテストを組み込む
+
+### 3.4 継続的なリファクタリング
+コードベースを継続的に改善して技術的負債を減らします。
+
+**適用方法**:
+- 「ボーイスカウトルール」: コードを触ったら以前より良くする
+- レビューで発見された問題は早めに対処
+- テストカバレッジを維持しながらリファクタリング
+- 小さな単位でリファクタリングを行う
+- リファクタリング専用のイテレーションやタスクを設ける
+
+## 4. 実践的なアプローチ
+
+### 4.1 コードレビューでの原則適用
+コードレビューでは上記の原則に基づいた確認を行いましょう。
+
+**チェックポイント**:
+- DRY: コードの重複はないか
+- KISS: 不必要に複雑な実装はないか
+- YAGNI: 現時点で不要な機能を実装していないか
+- 単一責任: 各コンポーネントは明確な責任を持っているか
+- 自己文書化: コードは理解しやすいか、適切な命名がされているか
+- テスタビリティ: コードはテストしやすい構造か
+
+### 4.2 バランスの取り方
+原則の適用はコンテキストによってバランスを取ることが重要です。
+
+**考慮点**:
+- パフォーマンス要件とコード品質のトレードオフ
+- 開発速度と保守性のバランス
+- 抽象化のコストと利益
+- プロジェクトの規模や寿命に応じた判断
+- チームのスキルセットと学習曲線
+
+### 4.3 学習と改善
+原則の適用はチーム全体のスキル向上と共に発展していくものです。
+
+**アプローチ**:
+- 定期的な勉強会やワークショップの開催
+- 優れた実装例の共有
+- フィードバックループの確立
+- コードリーディングセッションの実施
+- チーム内でのベストプラクティスドキュメントの整備
+
+---
+
+これらの原則は絶対的なルールではなく、ソフトウェア開発をガイドするための指針です。
+プロジェクトやチームの状況に応じて適切に適用し、より良いコードベースの構築を目指しましょう。

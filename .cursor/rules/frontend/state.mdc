@@ -1,0 +1,209 @@
+---
+description: State Management Design Principles and Implementation Guidelines Using Zustand in MapStack
+globs: 
+alwaysApply: false
+---
+---
+title: 状態管理（Zustand）規約
+description: MapStackにおけるZustandを使用した状態管理の設計原則と実装規約
+category: frontend
+importance: high
+last_updated: 2025-04-13
+---
+
+# 状態管理（Zustand）規約
+
+## 1. 基本原則
+
+### 1.1 ストアの責務
+- 単一責任の原則に従う
+- 関連する状態は1つのストアにまとめる
+- グローバルな状態のみをストアで管理
+- コンポーネント固有の状態はローカルステートで管理
+
+### 1.2 ストアの構成
+```tsx
+// 基本的なストアの構成
+import { create } from 'zustand'
+import { devtools } from 'zustand/middleware'
+
+interface UserState {
+  // 状態
+  user: User | null
+  isLoading: boolean
+  error: string | null
+
+  // アクション
+  setUser: (user: User | null) => void
+  setLoading: (isLoading: boolean) => void
+  setError: (error: string | null) => void
+
+  // 非同期アクション
+  fetchUser: (id: string) => Promise<void>
+  updateUser: (data: Partial<User>) => Promise<void>
+}
+
+export const useUserStore = create<UserState>()(
+  devtools(
+    (set) => ({
+      // 初期状態
+      user: null,
+      isLoading: false,
+      error: null,
+
+      // 同期アクション
+      setUser: (user) => set({ user }),
+      setLoading: (isLoading) => set({ isLoading }),
+      setError: (error) => set({ error }),
+
+      // 非同期アクション
+      fetchUser: async (id) => {
+        set({ isLoading: true, error: null })
+        try {
+          const response = await fetch(`/api/users/${id}`)
+          const user = await response.json()
+          set({ user, isLoading: false })
+        } catch (error) {
+          set({ error: (error as Error).message, isLoading: false })
+        }
+      },
+
+      updateUser: async (data) => {
+        set({ isLoading: true, error: null })
+        try {
+          const response = await fetch(`/api/users/${data.id}`, {
+            method: 'PATCH',
+            body: JSON.stringify(data),
+          })
+          const updatedUser = await response.json()
+          set({ user: updatedUser, isLoading: false })
+        } catch (error) {
+          set({ error: (error as Error).message, isLoading: false })
+        }
+      },
+    }),
+    { name: 'User Store' }
+  )
+)
+```
+
+## 2. ストアの分類
+
+### 2.1 ドメインストア
+- 特定のドメイン（ユーザー、認証、設定など）の状態を管理
+- `stores/domain/`ディレクトリに配置
+- 例：`userStore`、`authStore`、`settingsStore`
+
+### 2.2 UIストア
+- UIの状態（モーダル、トースト、テーマなど）を管理
+- `stores/ui/`ディレクトリに配置
+- 例：`modalStore`、`toastStore`、`themeStore`
+
+### 2.3 キャッシュストア
+- APIレスポンスのキャッシュを管理
+- `stores/cache/`ディレクトリに配置
+- 例：`apiCacheStore`
+
+## 3. パフォーマンス最適化
+
+### 3.1 セレクタの使用
+```tsx
+// セレクタの定義
+const selectUser = (state: UserState) => state.user
+const selectIsLoading = (state: UserState) => state.isLoading
+
+// コンポーネントでの使用
+const user = useUserStore(selectUser)
+const isLoading = useUserStore(selectIsLoading)
+```
+
+### 3.2 メモ化
+```tsx
+// メモ化されたセレクタ
+const selectUserData = createSelector(
+  selectUser,
+  (user) => ({
+    name: user?.name,
+    email: user?.email,
+    role: user?.role,
+  })
+)
+```
+
+## 4. エラーハンドリング
+
+### 4.1 エラー状態の管理
+```tsx
+interface ErrorState {
+  error: Error | null
+  setError: (error: Error | null) => void
+  clearError: () => void
+}
+
+export const useErrorStore = create<ErrorState>()(
+  devtools(
+    (set) => ({
+      error: null,
+      setError: (error) => set({ error }),
+      clearError: () => set({ error: null }),
+    }),
+    { name: 'Error Store' }
+  )
+)
+```
+
+### 4.2 エラーハンドリングユーティリティ
+```tsx
+export const handleStoreError = (error: unknown) => {
+  const errorMessage = error instanceof Error ? error.message : '予期せぬエラーが発生しました'
+  useErrorStore.getState().setError(new Error(errorMessage))
+}
+```
+
+## 5. テスト容易性
+
+### 5.1 テスト用のユーティリティ
+```tsx
+// テスト用のモックストア
+export const createMockStore = (initialState: Partial<UserState>) => {
+  return create<UserState>()(() => ({
+    ...useUserStore.getState(),
+    ...initialState,
+  }))
+}
+```
+
+### 5.2 テストの記述例
+```tsx
+describe('UserStore', () => {
+  it('should handle user fetch success', async () => {
+    const store = createMockStore({})
+    await store.getState().fetchUser('123')
+    expect(store.getState().user).toBeDefined()
+    expect(store.getState().isLoading).toBe(false)
+    expect(store.getState().error).toBeNull()
+  })
+})
+```
+
+## 6. デバッグと開発
+
+### 6.1 Redux DevToolsの活用
+- すべてのストアに`devtools`ミドルウェアを適用
+- アクション名を明確に設定
+- 状態の変更を追跡可能にする
+
+### 6.2 ロギング
+```tsx
+// ロギングミドルウェア
+const logger = (config) => (set, get, api) =>
+  config(
+    (args) => {
+      console.log('  applying', args)
+      set(args)
+      console.log('  new state', get())
+    },
+    get,
+    api
+  )
+```

@@ -1,0 +1,318 @@
+---
+description: Definition of Consistent Naming Conventions in MapStack
+globs: 
+alwaysApply: false
+---
+---
+title: 命名規則
+description: MapStackにおける一貫した命名規則の定義
+category: common
+importance: high
+last_updated: 2025-04-13
+---
+
+# 命名規則
+
+## 1. 基本原則
+
+### 1.1 命名の一般原則
+- 名前は明確で自己説明的であること
+- 略語は一般的に認知されているもののみ使用
+- 名前の長さと明確さのバランスを取る
+- プロジェクト全体で一貫性を保つ
+
+### 1.2 命名スタイル一覧
+
+| 要素 | スタイル | 例 |
+|------|----------|------|
+| **変数（JavaScript/TypeScript）** | キャメルケース | `userName`, `isActive` |
+| **変数（Python）** | スネークケース | `user_name`, `is_active` |
+| **関数/メソッド（JavaScript/TypeScript）** | キャメルケース | `getUserData()`, `calculateTotal()` |
+| **関数/メソッド（Python）** | スネークケース | `get_user_data()`, `calculate_total()` |
+| **クラス（全言語）** | パスカルケース | `UserProfile`, `PaymentProcessor` |
+| **インターフェース（TypeScript）** | パスカルケース、`I`プレフィックスなし | `UserData`, `ApiResponse` |
+| **型（TypeScript）** | パスカルケース | `UserType`, `ConfigOptions` |
+| **定数（全言語）** | 大文字スネークケース | `MAX_RETRY_COUNT`, `API_BASE_URL` |
+| **コンポーネント（React）** | パスカルケース | `UserCard`, `NavigationBar` |
+| **ファイル名（React/Next.js）** | パスカルケース（コンポーネント）<br>キャメルケース（ユーティリティ） | `UserCard.tsx`, `authUtils.ts` |
+| **ファイル名（Python）** | スネークケース | `user_service.py`, `auth_utils.py` |
+| **データベーステーブル** | スネークケース、複数形 | `users`, `product_categories` |
+| **データベースカラム** | スネークケース | `first_name`, `created_at` |
+| **API エンドポイント** | ケバブケース | `/api/user-progress`, `/auth/reset-password` |
+| **CSS クラス** | ケバブケース | `nav-item`, `btn-primary` |
+
+## 2. フロントエンド命名規則
+
+### 2.1 React コンポーネント
+```tsx
+// コンポーネント名はパスカルケース
+const UserProfile: React.FC<UserProfileProps> = ({ user }) => {
+  // 変数はキャメルケース
+  const fullName = `${user.firstName} ${user.lastName}`;
+  
+  // イベントハンドラは 'handle' プレフィックス
+  const handleSubmit = () => {
+    // 処理
+  };
+  
+  return (
+    <div className="user-profile">
+      <h2>{fullName}</h2>
+      <button onClick={handleSubmit}>保存</button>
+    </div>
+  );
+};
+```
+
+### 2.2 Hooks
+```tsx
+// カスタムフックは 'use' プレフィックス
+function useUserData(userId: string) {
+  const [userData, setUserData] = useState<UserData | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  
+  useEffect(() => {
+    // データ取得ロジック
+  }, [userId]);
+  
+  return { userData, isLoading };
+}
+```
+
+### 2.3 ファイル構成
+```
+src/
+├── components/
+│   ├── common/
+│   │   ├── Button.tsx      // 汎用コンポーネント
+│   │   └── Card.tsx
+│   ├── layout/
+│   │   ├── Header.tsx      // レイアウトコンポーネント
+│   │   └── Sidebar.tsx
+│   └── features/
+│       └── users/
+│           ├── UserList.tsx    // 機能固有のコンポーネント
+│           └── UserForm.tsx
+├── hooks/
+│   ├── useAuth.ts          // カスタムフック
+│   └── useForm.ts
+├── utils/
+│   ├── dateUtils.ts        // ユーティリティ関数
+│   └── formatUtils.ts
+└── types/
+    └── index.ts            // 型定義
+```
+
+## 3. バックエンド命名規則
+
+### 3.1 Python 関数とクラス
+```python
+# クラス名はパスカルケース
+class UserService:
+    # メソッド名はスネークケース
+    def get_user_by_id(self, user_id: str) -> Optional[User]:
+        """ユーザーをIDで取得する"""
+        return self.db.query(User).filter(User.id == user_id).first()
+    
+    def create_user(self, user_data: UserCreate) -> User:
+        """新規ユーザーを作成する"""
+        # 変数名はスネークケース
+        hashed_password = self.password_service.hash_password(user_data.password)
+        
+        # 処理
+        return user
+
+# 関数名はスネークケース
+def format_user_response(user: User) -> dict:
+    """ユーザーデータをレスポンス形式にフォーマットする"""
+    return {
+        "id": str(user.id),
+        "name": user.name,
+        "email": user.email
+    }
+```
+
+### 3.2 FastAPI ルーティング
+```python
+# ルーターはスネークケース
+user_router = APIRouter(prefix="/users", tags=["users"])
+
+# エンドポイント関数はスネークケース
+@user_router.get("/{user_id}", response_model=UserResponse)
+async def get_user(
+    user_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """特定のユーザーを取得する"""
+    return user_service.get_user_by_id(db, user_id)
+
+@user_router.post("/", response_model=UserResponse, status_code=201)
+async def create_user(
+    user_data: UserCreate,
+    db: Session = Depends(get_db)
+):
+    """新規ユーザーを作成する"""
+    return user_service.create_user(db, user_data)
+```
+
+## 4. データベース命名規則
+
+### 4.1 テーブルとカラム
+```sql
+-- テーブル名: スネークケース、複数形
+CREATE TABLE users (
+    -- カラム名: スネークケース
+    id UUID PRIMARY KEY,
+    first_name VARCHAR(100) NOT NULL,
+    last_name VARCHAR(100) NOT NULL,
+    email_address VARCHAR(255) NOT NULL UNIQUE,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL
+);
+
+CREATE TABLE team_members (
+    id UUID PRIMARY KEY,
+    team_id UUID NOT NULL REFERENCES teams(id),
+    user_id UUID NOT NULL REFERENCES users(id),
+    role_name VARCHAR(50) NOT NULL,
+    joined_at TIMESTAMP WITH TIME ZONE NOT NULL
+);
+```
+
+### 4.2 インデックスと制約
+```sql
+-- インデックス名: idx_テーブル名_カラム名
+CREATE INDEX idx_users_email_address ON users(email_address);
+
+-- 複合インデックス
+CREATE INDEX idx_team_members_team_user ON team_members(team_id, user_id);
+
+-- ユニーク制約: uq_テーブル名_カラム名
+ALTER TABLE users ADD CONSTRAINT uq_users_email_address UNIQUE (email_address);
+
+-- 外部キー制約: fk_テーブル名_参照テーブル名
+ALTER TABLE team_members 
+ADD CONSTRAINT fk_team_members_teams 
+FOREIGN KEY (team_id) REFERENCES teams(id);
+
+-- チェック制約: ck_テーブル名_説明
+ALTER TABLE products 
+ADD CONSTRAINT ck_products_price_positive 
+CHECK (price > 0);
+```
+
+## 5. API命名規則
+
+### 5.1 RESTful API エンドポイント
+- 名詞ベースの複数形を使用
+- リソース階層は浅く保つ
+- 適切なHTTPメソッドを使用
+
+```
+# 基本的なCRUDエンドポイント
+GET    /api/users           # ユーザー一覧の取得
+GET    /api/users/{id}      # 特定ユーザーの取得
+POST   /api/users           # 新規ユーザーの作成
+PUT    /api/users/{id}      # ユーザー情報の完全更新
+PATCH  /api/users/{id}      # ユーザー情報の部分更新
+DELETE /api/users/{id}      # ユーザーの削除
+
+# 関連リソースのネスト
+GET    /api/users/{id}/teams        # ユーザーが所属するチーム一覧
+POST   /api/teams/{id}/members      # チームにメンバーを追加
+
+# アクション指向のエンドポイント
+POST   /api/auth/login              # ログイン
+POST   /api/auth/logout             # ログアウト
+POST   /api/users/{id}/activate     # ユーザーをアクティブ化
+```
+
+### 5.2 クエリパラメータ
+- パラメータ名はキャメルケース
+- フィルタリングはプレフィックス`filter`を使用
+- ソートは`sortBy`と`sortOrder`を使用
+- ページネーションは`page`と`pageSize`を使用
+
+```
+/api/users?filterRole=admin&sortBy=createdAt&sortOrder=desc
+/api/products?filterCategory=electronics&minPrice=100&maxPrice=500
+/api/activities?page=2&pageSize=20
+```
+
+## 6. 特殊なケース
+
+### 6.1 グローバル状態（Zustand）
+```tsx
+// ストア名はキャメルケース、'use'プレフィックス
+export const useUserStore = create<UserState>()((set) => ({
+  // 状態はキャメルケース
+  currentUser: null,
+  isLoading: false,
+  
+  // アクションはキャメルケース
+  setCurrentUser: (user) => set({ currentUser: user }),
+  clearCurrentUser: () => set({ currentUser: null }),
+  
+  // 非同期アクションも同様
+  fetchCurrentUser: async () => {
+    set({ isLoading: true });
+    // 処理
+    set({ isLoading: false });
+  }
+}));
+```
+
+### 6.2 環境変数
+- 環境変数は大文字スネークケース
+- 接頭辞としてプロジェクト名またはコンテキストを使用
+
+```
+# .env.example
+MAPSTACK_API_URL=https://api.example.com
+MAPSTACK_DATABASE_URL=postgresql://user:password@localhost:5432/dbname
+MAPSTACK_JWT_SECRET=your_jwt_secret
+MAPSTACK_REDIS_URL=redis://localhost:6379
+```
+
+### 6.3 設定ファイル
+```python
+# config.py
+class Settings(BaseSettings):
+    # 設定値はスネークケース
+    app_name: str = "MapStack"
+    api_prefix: str = "/api"
+    debug: bool = False
+    database_url: str
+    jwt_secret: str
+    jwt_algorithm: str = "HS256"
+    jwt_expires_minutes: int = 30
+```
+
+## 7. 命名のアンチパターン
+
+### 7.1 避けるべき命名パターン
+- 単一文字の変数（ループカウンタやラムダ式を除く）
+- あいまいな略語（`mgr`、`util`、`info`など）
+- 過度に長い名前
+- 命名規則の混在（同じコンテキストでの命名スタイルの不一致）
+- 無意味な命名（`data1`、`temp`、`foo`など）
+- 先頭のアンダースコアの使用（特別な場合を除く）
+
+### 7.2 改善例
+```typescript
+// 悪い例
+const d = new Date();
+const t = d.getTime();
+const res = await fetch('/api/data');
+const rJson = await res.json();
+const x = rJson.items.map(i => i.val);
+
+// 良い例
+const currentDate = new Date();
+const timestamp = currentDate.getTime();
+const response = await fetch('/api/data');
+const responseData = await response.json();
+const itemValues = responseData.items.map(item => item.value);
+```

@@ -1,0 +1,458 @@
+---
+description: Business Logic Layer Design Principles and Implementation Guidelines in MapStack
+globs: 
+alwaysApply: false
+---
+---
+title: ビジネスロジック層（サービス）規約
+description: MapStackにおけるビジネスロジック層の設計原則と実装規約
+category: backend
+importance: high
+last_updated: 2025-04-13
+---
+
+# ビジネスロジック層（サービス）規約
+
+## 1. 基本原則
+
+### 1.1 責務の分離
+- APIエンドポイントからビジネスロジックを分離
+- データアクセスロジックはリポジトリに分離
+- 1つのサービスは1つのドメインに責任を持つ
+- 横断的な処理は共通サービスに抽出
+
+### 1.2 サービス構成
+```python
+# services/user_service.py
+from typing import List, Optional
+from sqlalchemy.orm import Session
+from app.models.user import User
+from app.schemas.user import UserCreate, UserUpdate
+from app.core.security import get_password_hash
+
+def get_user_by_id(db: Session, user_id: str) -> Optional[User]:
+    """IDでユーザーを取得する"""
+    return db.query(User).filter(User.id == user_id).first()
+
+def get_user_by_email(db: Session, email: str) -> Optional[User]:
+    """メールアドレスでユーザーを取得する"""
+    return db.query(User).filter(User.email == email).first()
+
+def get_users(
+    db: Session, 
+    skip: int = 0, 
+    limit: int = 100,
+    sort_by: str = "created_at",
+    order: str = "desc",
+    search: Optional[str] = None
+) -> List[User]:
+    """ユーザー一覧を取得する"""
+    query = db.query(User)
+    
+    # 検索条件の適用
+    if search:
+        query = query.filter(
+            User.name.ilike(f"%{search}%") | User.email.ilike(f"%{search}%")
+        )
+    
+    # ソート順の適用
+    if order.lower() == "asc":
+        query = query.order_by(getattr(User, sort_by).asc())
+    else:
+        query = query.order_by(getattr(User, sort_by).desc())
+    
+    return query.offset(skip).limit(limit).all()
+
+def create_user(db: Session, user_data: UserCreate) -> User:
+    """新規ユーザーを作成する"""
+    # パスワードのハッシュ化
+    hashed_password = get_password_hash(user_data.password)
+    
+    # ユーザーオブジェクトの作成
+    db_user = User(
+        email=user_data.email,
+        name=user_data.name,
+        hashed_password=hashed_password,
+        is_active=user_data.is_active
+    )
+    
+    # DBに保存
+    db.add(db_user)
+    db.commit()
+    db.refresh(db_user)
+    
+    return db_user
+
+def update_user(db: Session, user_id: str, user_data: UserUpdate) -> Optional[User]:
+    """ユーザー情報を更新する"""
+    # ユーザーの取得
+    db_user = get_user_by_id(db, user_id)
+    if not db_user:
+        return None
+    
+    # 更新データの準備
+    update_data = user_data.dict(exclude_unset=True)
+    
+    # パスワードが含まれている場合はハッシュ化
+    if update_data.get("password"):
+        update_data["hashed_password"] = get_password_hash(update_data["password"])
+        del update_data["password"]
+    
+    # 属性の更新
+    for key, value in update_data.items():
+        setattr(db_user, key, value)
+    
+    # DBに保存
+    db.commit()
+    db.refresh(db_user)
+    
+    return db_user
+
+def delete_user(db: Session, user_id: str) -> bool:
+    """ユーザーを削除する"""
+    db_user = get_user_by_id(db, user_id)
+    if not db_user:
+        return False
+    
+    db.delete(db_user)
+    db.commit()
+    
+    return True
+```
+
+## 2. トランザクション管理
+
+### 2.1 基本的なトランザクション
+```python
+def transfer_points(
+    db: Session, 
+    from_user_id: str, 
+    to_user_id: str, 
+    points: int
+) -> bool:
+    """ユーザー間でポイントを移動する"""
+    try:
+        # 送信元ユーザーの取得
+        from_user = get_user_by_id(db, from_user_id)
+        if not from_user or from_user.points < points:
+            return False
+        
+        # 送信先ユーザーの取得
+        to_user = get_user_by_id(db, to_user_id)
+        if not to_user:
+            return False
+        
+        # ポイントの移動
+        from_user.points -= points
+        to_user.points += points
+        
+        # 移動履歴の記録
+        point_history = PointHistory(
+            from_user_id=from_user_id,
+            to_user_id=to_user_id,
+            points=points,
+            description="ポイント移動"
+        )
+        db.add(point_history)
+        
+        # 一括コミット
+        db.commit()
+        
+        return True
+    except Exception as e:
+        # エラー時はロールバック
+        db.rollback()
+        logger.error(f"ポイント移動エラー: {str(e)}")
+        return False
+```
+
+### 2.2 ネストしたトランザクション
+```python
+def process_order(db: Session, order_data: OrderCreate) -> Optional[Order]:
+    """注文を処理する"""
+    # 外部トランザクション
+    try:
+        # 注文の作成
+        order = create_order(db, order_data)
+        
+        # 支払い処理
+        payment_result = process_payment(db, order.id, order_data.payment)
+        if not payment_result:
+            # 支払い失敗時はロールバック
+            db.rollback()
+            return None
+        
+        # 在庫の更新
+        stock_result = update_stock(db, order.items)
+        if not stock_result:
+            # 在庫更新失敗時はロールバック
+            db.rollback()
+            return None
+        
+        # すべて成功したらコミット
+        db.commit()
+        
+        # 非トランザクション処理（通知など）
+        send_order_confirmation(order.id)
+        
+        return order
+    except Exception as e:
+        db.rollback()
+        logger.error(f"注文処理エラー: {str(e)}")
+        return None
+```
+
+## 3. エラーハンドリング
+
+### 3.1 例外の定義
+```python
+# core/exceptions.py
+from typing import Optional
+from fastapi import status
+
+class AppException(Exception):
+    """アプリケーション固有の例外"""
+    def __init__(
+        self,
+        status_code: int,
+        detail: str,
+        code: Optional[str] = None
+    ):
+        self.status_code = status_code
+        self.detail = detail
+        self.code = code
+
+class ResourceNotFoundException(AppException):
+    """リソースが見つからない例外"""
+    def __init__(self, detail: str = "リソースが見つかりません", code: str = "not_found"):
+        super().__init__(status.HTTP_404_NOT_FOUND, detail, code)
+
+class ResourceConflictException(AppException):
+    """リソース競合例外"""
+    def __init__(self, detail: str = "リソースが競合しています", code: str = "conflict"):
+        super().__init__(status.HTTP_409_CONFLICT, detail, code)
+
+class BusinessLogicException(AppException):
+    """ビジネスロジック例外"""
+    def __init__(self, detail: str, code: str = "business_logic_error"):
+        super().__init__(status.HTTP_400_BAD_REQUEST, detail, code)
+```
+
+### 3.2 サービスでのエラーハンドリング
+```python
+def register_user(db: Session, user_data: UserCreate) -> User:
+    """ユーザー登録処理"""
+    # 既存ユーザーチェック
+    existing_user = get_user_by_email(db, user_data.email)
+    if existing_user:
+        raise ResourceConflictException(
+            detail="このメールアドレスは既に登録されています",
+            code="email_already_exists"
+        )
+    
+    # ユーザー作成
+    try:
+        user = create_user(db, user_data)
+        
+        # メール確認トークンの生成
+        token = generate_email_verification_token(user.id)
+        
+        # 確認メールの送信
+        send_verification_email(user.email, token)
+        
+        return user
+    except Exception as e:
+        db.rollback()
+        logger.error(f"ユーザー登録エラー: {str(e)}")
+        raise BusinessLogicException(
+            detail="ユーザー登録処理中にエラーが発生しました",
+            code="registration_failed"
+        )
+```
+
+## 4. パフォーマンス最適化
+
+### 4.1 クエリ最適化
+```python
+def get_active_users_with_stats(db: Session, skip: int = 0, limit: int = 100) -> List[User]:
+    """アクティブなユーザーと統計情報を取得"""
+    return db.query(User).\
+        options(
+            # 必要なリレーションを一度に取得
+            joinedload(User.profile),
+            joinedload(User.activities).subqueryload(Activity.details),
+            joinedload(User.achievements)
+        ).\
+        filter(User.is_active == True).\
+        offset(skip).\
+        limit(limit).\
+        all()
+```
+
+### 4.2 バッチ処理
+```python
+def update_user_ranking(db: Session) -> None:
+    """すべてのユーザーのランキングを更新"""
+    # SQLアルケミーのCoreを使用した一括更新
+    from sqlalchemy import text
+    
+    # ランキング更新のSQLを実行
+    db.execute(text("""
+        WITH ranked_users AS (
+            SELECT 
+                id,
+                ROW_NUMBER() OVER (ORDER BY points DESC) as rank
+            FROM users
+            WHERE is_active = TRUE
+        )
+        UPDATE users
+        SET rank = ranked_users.rank
+        FROM ranked_users
+        WHERE users.id = ranked_users.id
+    """))
+    
+    db.commit()
+```
+
+## 5. セキュリティ
+
+### 5.1 認証関連
+```python
+# services/auth_service.py
+from datetime import datetime, timedelta
+from typing import Optional
+from jose import jwt
+from passlib.context import CryptContext
+from app.core.config import settings
+
+# パスワードハッシュ用のコンテキスト
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """パスワードの検証"""
+    return pwd_context.verify(plain_password, hashed_password)
+
+def get_password_hash(password: str) -> str:
+    """パスワードのハッシュ化"""
+    return pwd_context.hash(password)
+
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
+    """アクセストークンの生成"""
+    to_encode = data.copy()
+    
+    # 有効期限の設定
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    
+    to_encode.update({"exp": expire})
+    
+    # JWTの生成
+    encoded_jwt = jwt.encode(
+        to_encode, 
+        settings.SECRET_KEY, 
+        algorithm=settings.ALGORITHM
+    )
+    
+    return encoded_jwt
+
+def authenticate_user(db: Session, email: str, password: str) -> Optional[User]:
+    """ユーザー認証"""
+    user = get_user_by_email(db, email)
+    if not user:
+        return None
+    
+    if not verify_password(password, user.hashed_password):
+        return None
+    
+    return user
+```
+
+### 5.2 権限チェック
+```python
+def can_modify_resource(user: User, resource_owner_id: str) -> bool:
+    """リソース修正権限のチェック"""
+    # 管理者は常に可能
+    if user.is_admin:
+        return True
+    
+    # 自分のリソースのみ変更可能
+    return user.id == resource_owner_id
+
+def check_task_permission(user: User, task: Task) -> bool:
+    """タスクへのアクセス権チェック"""
+    # 管理者は全てのタスクにアクセス可能
+    if user.is_admin:
+        return True
+    
+    # タスクの所有者
+    if task.user_id == user.id:
+        return True
+    
+    # チームメンバーの場合
+    if task.team_id:
+        # チームメンバーシップの確認
+        team_member = get_team_member(task.team_id, user.id)
+        return team_member is not None
+    
+    return False
+```
+
+## 6. デバッグとログ記録
+
+### 6.1 ロギング
+```python
+# services内での標準的なロギング
+import logging
+from app.core.logging import get_logger
+
+logger = get_logger(__name__)
+
+def process_critical_operation(data: dict) -> bool:
+    """重要な処理を実行"""
+    try:
+        logger.info(f"重要な処理を開始: {data.get('operation_id')}")
+        
+        # 処理の実行
+        result = execute_operation(data)
+        
+        logger.info(f"処理成功: {data.get('operation_id')}")
+        return result
+    except Exception as e:
+        logger.error(
+            f"処理失敗: {data.get('operation_id')}, エラー: {str(e)}",
+            exc_info=True  # スタックトレースを含める
+        )
+        return False
+```
+
+### 6.2 パフォーマンスモニタリング
+```python
+import time
+from functools import wraps
+
+def monitor_execution_time(func):
+    """関数の実行時間を測定するデコレータ"""
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        start_time = time.time()
+        result = func(*args, **kwargs)
+        end_time = time.time()
+        
+        execution_time = end_time - start_time
+        logger.debug(f"{func.__name__} 実行時間: {execution_time:.4f}秒")
+        
+        # 閾値を超える場合は警告
+        if execution_time > 1.0:  # 1秒以上かかる処理
+            logger.warning(f"遅い処理検出: {func.__name__} ({execution_time:.4f}秒)")
+        
+        return result
+    return wrapper
+
+@monitor_execution_time
+def heavy_calculation(data: dict) -> dict:
+    """重い計算処理"""
+    # 処理内容
+    return result
+```

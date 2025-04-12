@@ -1,0 +1,198 @@
+---
+description: Database Design Principles and Structure in MapStack
+globs: 
+alwaysApply: false
+---
+---
+title: データベース設計ガイドライン
+description: MapStackにおけるデータベース設計の原則と構造
+category: database
+importance: high
+last_updated: 2025-04-13
+---
+
+# データベース設計ガイドライン
+
+## 概要
+
+MapStackプロジェクトでは、データを効率的に保存・取得するために**PostgreSQL**を使用します。このドキュメントでは、データベース設計の基本原則とスキーマ構造について説明します。
+
+## 設計原則
+
+### 1. 正規化
+
+- データの重複を避ける
+- 第三正規形（3NF）を基本として設計する
+- 必要に応じてパフォーマンス向上のために非正規化を検討する
+
+### 2. インデックス戦略
+
+- よく検索される列にはインデックスを作成する
+- 複合インデックスを適切に利用する
+- インデックスのパフォーマンスを定期的に評価する
+
+### 3. リレーションシップ
+
+- 外部キー制約を適切に設定する
+- カスケード削除/更新を必要に応じて設定する
+- 多対多関係には中間テーブルを使用する
+
+### 4. データ型
+
+- 適切なデータ型を選択する（例：数値には`INTEGER`/`BIGINT`）
+- 可変長文字列には`VARCHAR`、固定長には`CHAR`を使用する
+- 日付と時刻には`TIMESTAMP WITH TIME ZONE`を使用する
+
+## データベーススキーマ
+
+### コアテーブル
+
+#### users
+```sql
+CREATE TABLE users (
+    id SERIAL PRIMARY KEY,
+    username VARCHAR(50) UNIQUE NOT NULL,
+    email VARCHAR(100) UNIQUE NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    full_name VARCHAR(100),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    last_login TIMESTAMP WITH TIME ZONE,
+    is_active BOOLEAN DEFAULT TRUE,
+    role VARCHAR(20) DEFAULT 'user'
+);
+
+CREATE INDEX idx_users_email ON users(email);
+CREATE INDEX idx_users_username ON users(username);
+```
+
+#### projects
+```sql
+CREATE TABLE projects (
+    id SERIAL PRIMARY KEY,
+    title VARCHAR(100) NOT NULL,
+    description TEXT,
+    created_by INTEGER REFERENCES users(id),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    is_public BOOLEAN DEFAULT TRUE,
+    status VARCHAR(20) DEFAULT 'active'
+);
+
+CREATE INDEX idx_projects_created_by ON projects(created_by);
+CREATE INDEX idx_projects_status ON projects(status);
+```
+
+#### tasks
+```sql
+CREATE TABLE tasks (
+    id SERIAL PRIMARY KEY,
+    title VARCHAR(100) NOT NULL,
+    description TEXT,
+    project_id INTEGER REFERENCES projects(id) ON DELETE CASCADE,
+    assigned_to INTEGER REFERENCES users(id),
+    created_by INTEGER REFERENCES users(id),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    due_date TIMESTAMP WITH TIME ZONE,
+    priority VARCHAR(20) DEFAULT 'medium',
+    status VARCHAR(20) DEFAULT 'todo'
+);
+
+CREATE INDEX idx_tasks_project_id ON tasks(project_id);
+CREATE INDEX idx_tasks_assigned_to ON tasks(assigned_to);
+CREATE INDEX idx_tasks_status ON tasks(status);
+CREATE INDEX idx_tasks_priority ON tasks(priority);
+```
+
+#### tags
+```sql
+CREATE TABLE tags (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(50) UNIQUE NOT NULL,
+    description TEXT,
+    color VARCHAR(7)
+);
+
+CREATE INDEX idx_tags_name ON tags(name);
+```
+
+#### task_tags
+```sql
+CREATE TABLE task_tags (
+    task_id INTEGER REFERENCES tasks(id) ON DELETE CASCADE,
+    tag_id INTEGER REFERENCES tags(id) ON DELETE CASCADE,
+    PRIMARY KEY (task_id, tag_id)
+);
+
+CREATE INDEX idx_task_tags_task_id ON task_tags(task_id);
+CREATE INDEX idx_task_tags_tag_id ON task_tags(tag_id);
+```
+
+### 拡張テーブル
+
+#### comments
+```sql
+CREATE TABLE comments (
+    id SERIAL PRIMARY KEY,
+    content TEXT NOT NULL,
+    user_id INTEGER REFERENCES users(id),
+    task_id INTEGER REFERENCES tasks(id) ON DELETE CASCADE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE INDEX idx_comments_task_id ON comments(task_id);
+CREATE INDEX idx_comments_user_id ON comments(user_id);
+```
+
+#### attachments
+```sql
+CREATE TABLE attachments (
+    id SERIAL PRIMARY KEY,
+    task_id INTEGER REFERENCES tasks(id) ON DELETE CASCADE,
+    file_path VARCHAR(255) NOT NULL,
+    file_type VARCHAR(50) NOT NULL,
+    upload_date TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    uploaded_by INTEGER REFERENCES users(id),
+    title VARCHAR(100),
+    description TEXT
+);
+
+CREATE INDEX idx_attachments_task_id ON attachments(task_id);
+```
+
+## 移行戦略
+
+### マイグレーション管理
+
+- Alembic（SQLAlchemy用）を使用してマイグレーションを管理
+- 各マイグレーションにはアップグレードとダウングレードの両方の手順を含める
+- マイグレーションはバージョン管理し、チームで共有する
+
+### バックアップ戦略
+
+- 毎日の完全バックアップ
+- 継続的なWALアーカイブ（Point-in-Time Recovery用）
+- 定期的なバックアップリストアテスト
+
+## パフォーマンス最適化
+
+### クエリ最適化
+
+- よく実行されるクエリには専用のインデックスを作成
+- EXPLAIN ANALYZEを使用してクエリプランを分析
+- 必要に応じてビューとマテリアライズドビューを使用
+
+### コネクション管理
+
+- 接続プールを使用してデータベース接続を効率的に管理
+- 長時間実行クエリの監視と最適化
+- 必要に応じてリードレプリカを使用して読み取り負荷を分散
+
+## セキュリティ考慮事項
+
+- 機密データの暗号化
+- ロールベースのアクセス制御
+- SQL注入対策としてのパラメータ化クエリの使用
+- 監査ログの実装

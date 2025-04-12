@@ -1,0 +1,316 @@
+---
+description: Database Schema Design Principles and Implementation Guidelines in MapStack
+globs: 
+alwaysApply: false
+---
+---
+title: データベーススキーマ設計規約
+description: MapStackにおけるデータベーススキーマの設計原則と実装規約
+category: database
+importance: high
+last_updated: 2025-04-13
+---
+
+# データベーススキーマ設計規約
+
+## 1. 基本原則
+
+### 1.1 テーブル設計
+- テーブル名は複数形、小文字、スネークケース
+- 主キーは`id`とし、UUID型を使用
+- 作成日時・更新日時は全テーブルに含める
+- 論理削除（ソフトデリート）を基本とする
+
+```sql
+CREATE TABLE users (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    email VARCHAR(255) NOT NULL UNIQUE,
+    name VARCHAR(100) NOT NULL,
+    hashed_password VARCHAR(255) NOT NULL,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    is_admin BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP WITH TIME ZONE
+);
+```
+
+### 1.2 命名規則
+
+| 要素 | 規則 | 例 |
+|------|------|------|
+| **テーブル名** | 複数形、スネークケース | `users`, `learning_activities` |
+| **カラム名** | スネークケース | `first_name`, `created_at` |
+| **主キー** | `id` | `id` |
+| **外部キー** | `{単数形テーブル名}_id` | `user_id`, `team_id` |
+| **インデックス** | `idx_{テーブル名}_{カラム名}` | `idx_users_email`, `idx_activities_user_id` |
+| **ユニーク制約** | `uq_{テーブル名}_{カラム名}` | `uq_users_email` |
+| **チェック制約** | `ck_{テーブル名}_{説明}` | `ck_products_price_positive` |
+
+## 2. データ型
+
+### 2.1 推奨データ型
+- **ID**: UUID
+- **テキスト**: VARCHAR(最大長を指定)
+- **長文テキスト**: TEXT
+- **数値**: INTEGER, BIGINT, NUMERIC(精度が必要な場合)
+- **真偽値**: BOOLEAN
+- **日時**: TIMESTAMP WITH TIME ZONE
+- **列挙型**: ENUM型またはチェック制約付きVARCHAR
+- **JSON**: JSONB (PostgreSQL)
+
+```sql
+-- PostgreSQLでの列挙型の例
+CREATE TYPE user_role AS ENUM ('admin', 'moderator', 'user');
+
+CREATE TABLE users (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    email VARCHAR(255) NOT NULL UNIQUE,
+    name VARCHAR(100) NOT NULL,
+    role user_role NOT NULL DEFAULT 'user',
+    -- その他のカラム
+);
+
+-- または、チェック制約を使用
+CREATE TABLE users (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    email VARCHAR(255) NOT NULL UNIQUE,
+    name VARCHAR(100) NOT NULL,
+    role VARCHAR(20) NOT NULL DEFAULT 'user',
+    CONSTRAINT ck_users_role CHECK (role IN ('admin', 'moderator', 'user')),
+    -- その他のカラム
+);
+```
+
+### 2.2 SQLAlchemyでのモデル定義
+```python
+# models/user.py
+from sqlalchemy import Boolean, Column, String, DateTime, ForeignKey, Enum
+from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.sql import func
+import enum
+import uuid
+
+from app.db.base_class import Base
+
+class UserRole(enum.Enum):
+    admin = "admin"
+    moderator = "moderator"
+    user = "user"
+
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    email = Column(String(255), unique=True, index=True, nullable=False)
+    name = Column(String(100), nullable=False)
+    hashed_password = Column(String(255), nullable=False)
+    role = Column(Enum(UserRole), default=UserRole.user, nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    deleted_at = Column(DateTime(timezone=True), nullable=True)
+```
+
+## 3. リレーション設計
+
+### 3.1 外部キー
+- 外部キーには常にインデックスを設定
+- 参照整合性制約を適切に設定（ON DELETE, ON UPDATE）
+- カスケード削除は慎重に適用
+
+```sql
+CREATE TABLE teams (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name VARCHAR(100) NOT NULL,
+    -- その他のカラム
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE team_members (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    team_id UUID NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    role VARCHAR(20) NOT NULL DEFAULT 'member',
+    CONSTRAINT ck_team_members_role CHECK (role IN ('owner', 'admin', 'member')),
+    CONSTRAINT uq_team_members_team_user UNIQUE (team_id, user_id),
+    -- その他のカラム
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- インデックスの作成
+CREATE INDEX idx_team_members_team_id ON team_members(team_id);
+CREATE INDEX idx_team_members_user_id ON team_members(user_id);
+```
+
+### 3.2 SQLAlchemyでのリレーション定義
+```python
+# models/team.py
+from sqlalchemy import Column, String, DateTime, ForeignKey, UniqueConstraint
+from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import relationship
+from sqlalchemy.sql import func
+import uuid
+
+from app.db.base_class import Base
+
+class Team(Base):
+    __tablename__ = "teams"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name = Column(String(100), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    
+    # リレーションシップ
+    members = relationship("TeamMember", back_populates="team", cascade="all, delete-orphan")
+
+class TeamMember(Base):
+    __tablename__ = "team_members"
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    team_id = Column(UUID(as_uuid=True), ForeignKey("teams.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    role = Column(String(20), default="member", nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    
+    # リレーションシップ
+    team = relationship("Team", back_populates="members")
+    user = relationship("User", back_populates="team_memberships")
+    
+    # ユニーク制約
+    __table_args__ = (
+        UniqueConstraint("team_id", "user_id", name="uq_team_members_team_user"),
+    )
+```
+
+## 4. インデックス設計
+
+### 4.1 インデックスの作成基準
+- 頻繁に検索条件として使用されるカラム
+- 外部キー
+- ユニーク制約が設定されたカラム
+- 並べ替えに頻繁に使用されるカラム
+
+### 4.2 インデックスのタイプ
+- **B-Tree**: 一般的な用途（デフォルト）
+- **GIN**: 配列、JSONBなど複合データ型の検索
+- **GIST**: 地理データや範囲型
+- **複合インデックス**: 複数のカラムで検索する場合
+
+```sql
+-- B-Treeインデックス（標準）
+CREATE INDEX idx_users_email ON users(email);
+
+-- 複合インデックス
+CREATE INDEX idx_activities_user_date ON learning_activities(user_id, activity_date);
+
+-- GINインデックス（PostgreSQL）
+CREATE INDEX idx_documents_tags ON documents USING GIN(tags);
+
+-- 部分インデックス
+CREATE INDEX idx_users_active ON users(id) WHERE is_active = TRUE;
+```
+
+## 5. マイグレーション
+
+### 5.1 マイグレーションファイル
+- マイグレーションは小さな単位で作成
+- 各マイグレーションは可逆的に設計（up/down）
+- 本番環境でのデータ損失を避ける設計
+
+```python
+# alembic/versions/xxxx_add_user_role.py
+"""add user role
+
+Revision ID: xxxx
+Revises: yyyy
+Create Date: 2023-01-01 12:00:00
+
+"""
+from alembic import op
+import sqlalchemy as sa
+from sqlalchemy.dialects.postgresql import ENUM
+
+# revision identifiers
+revision = 'xxxx'
+down_revision = 'yyyy'
+branch_labels = None
+depends_on = None
+
+# ENUMタイプの作成
+user_role = ENUM('admin', 'moderator', 'user', name='user_role')
+
+def upgrade():
+    # ENUMタイプの作成
+    user_role.create(op.get_bind())
+    
+    # カラムの追加
+    op.add_column('users', sa.Column('role', sa.Enum('admin', 'moderator', 'user', name='user_role'), server_default='user', nullable=False))
+    
+    # データ移行（既存ユーザーがある場合）
+    # 管理者アカウントを特定して更新
+    op.execute("UPDATE users SET role = 'admin' WHERE email = 'admin@example.com'")
+
+def downgrade():
+    # カラムの削除
+    op.drop_column('users', 'role')
+    
+    # ENUMタイプの削除
+    user_role.drop(op.get_bind())
+```
+
+### 5.2 マイグレーション実行ルール
+- 開発環境では`alembic upgrade head`を使用
+- 本番環境ではマイグレーションを慎重にレビュー
+- ロールバック手順を常に準備
+- 大きなデータ変更は分割して実行
+
+## 6. パフォーマンス考慮事項
+
+### 6.1 スケーラビリティ
+- 不必要なカラムの追加を避ける
+- 適切な正規化レベルを選択
+- 巨大テーブルはパーティショニングを検討
+
+### 6.2 クエリ最適化
+- EXPLAIN ANALYZEを使用してクエリを分析
+- 必要に応じてインデックスを追加
+- 大量データ操作はバッチ処理
+
+```sql
+-- クエリ実行計画の確認
+EXPLAIN ANALYZE 
+SELECT u.name, COUNT(a.id) as activity_count
+FROM users u
+JOIN learning_activities a ON u.id = a.user_id
+WHERE u.is_active = TRUE AND a.activity_date > '2023-01-01'
+GROUP BY u.id, u.name
+ORDER BY activity_count DESC
+LIMIT 10;
+```
+
+## 7. セキュリティ
+
+### 7.1 データ保護
+- 機密データの暗号化（必要に応じて）
+- パスワードはハッシュ化して保存
+- PII（個人識別情報）の取り扱いに注意
+
+### 7.2 アクセス制御
+- データベースユーザー権限を最小限に設定
+- アプリケーションロール毎に適切な権限設定
+- 重要な操作はデータベースレベルでAUDITログを取得
+
+```sql
+-- データベースユーザーと権限
+CREATE ROLE app_readonly;
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO app_readonly;
+
+CREATE ROLE app_writer;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO app_writer;
+REVOKE DELETE ON users FROM app_writer;  -- 特定テーブルの削除権限を制限
+```

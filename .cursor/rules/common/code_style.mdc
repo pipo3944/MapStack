@@ -1,0 +1,601 @@
+---
+description: Definition of Consistent Code Style in MapStack
+globs: 
+alwaysApply: false
+---
+---
+title: コードスタイル規約
+description: MapStackにおける一貫したコードスタイルの定義
+category: common
+importance: high
+last_updated: 2025-04-13
+---
+
+# コードスタイル規約
+
+## 1. 基本原則
+
+### 1.1 一般的なコードスタイル
+- 読みやすさと保守性を最優先する
+- 一貫性のあるフォーマットを維持する
+- 適切なコメントで意図を明確に
+- 自己文書化コードを心がける
+- 言語や環境の標準的な慣習に従う
+
+### 1.2 自動フォーマット
+- すべてのコードは自動フォーマットツールで整形する
+- コミット前にリンターとフォーマッターを実行する
+- VSCode設定とエディタ設定を統一する
+
+```json
+// .vscode/settings.json
+{
+  "editor.formatOnSave": true,
+  "editor.defaultFormatter": null,
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": true
+  },
+  "[typescript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[typescriptreact]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[javascript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[python]": {
+    "editor.defaultFormatter": "ms-python.black-formatter"
+  }
+}
+```
+
+## 2. JavaScript/TypeScript スタイル
+
+### 2.1 基本的なフォーマット
+- インデントは2スペース
+- セミコロンは必須
+- 1行の最大長は100文字
+- 単一引用符（`'`）を優先使用
+- 末尾カンマを使用
+- オブジェクト/配列の最後の要素にもカンマを付ける
+
+```typescript
+// 推奨形式
+const user = {
+  firstName: 'Taro',
+  lastName: 'Yamada',
+  age: 30,
+  isActive: true,
+};
+
+// 長い配列は複数行に分ける
+const permissions = [
+  'read:users',
+  'write:users',
+  'delete:users',
+  'read:products',
+  'write:products',
+];
+```
+
+### 2.2 TypeScript固有のスタイル
+- 可能な限り型推論を活用
+- 複雑な型は型エイリアスまたはインターフェースで定義
+- ジェネリック型は適切な場所で使用
+- `any`型の使用は可能な限り避ける
+- `unknown`を厳密な型安全性が必要な場合に使用
+
+```typescript
+// 型エイリアスの使用
+type UserId = string;
+type UserRole = 'admin' | 'user' | 'guest';
+
+// インターフェースの使用
+interface User {
+  id: UserId;
+  name: string;
+  email: string;
+  role: UserRole;
+  isActive: boolean;
+}
+
+// ジェネリック型の使用
+function getFirst<T>(items: T[]): T | undefined {
+  return items.length > 0 ? items[0] : undefined;
+}
+
+// 型アサーションが必要な場合は 'as' 構文を使用
+const userInput = event.target.value as string;
+```
+
+### 2.3 関数スタイル
+- 可能な限り矢印関数を使用
+- 引数と戻り値に型アノテーションを付ける
+- デストラクチャリングを活用
+- デフォルトパラメータを適切に使用
+
+```typescript
+// 推奨される関数スタイル
+const calculateTotalPrice = (
+  items: CartItem[],
+  discount: number = 0,
+  tax: number = 0.1,
+): number => {
+  const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  const discountedPrice = subtotal * (1 - discount);
+  return discountedPrice * (1 + tax);
+};
+
+// オブジェクトのデストラクチャリング
+const displayUserInfo = ({ name, email, role }: User): string => {
+  return `${name} (${email}) - ${role}`;
+};
+```
+
+## 3. React/JSX スタイル
+
+### 3.1 コンポーネント構造
+- 機能単位で小さなコンポーネントに分割
+- 複雑なレンダリングロジックは分割して抽象化
+- Propsの型定義は明示的に行う
+- コンポーネントのExportは名前付きExportを優先
+
+```tsx
+// 推奨されるコンポーネントスタイル
+import React from 'react';
+
+interface UserCardProps {
+  user: User;
+  onEdit?: (userId: string) => void;
+  isSelected?: boolean;
+}
+
+export const UserCard: React.FC<UserCardProps> = ({
+  user,
+  onEdit,
+  isSelected = false,
+}) => {
+  const { name, email, role } = user;
+  
+  const handleEditClick = () => {
+    if (onEdit) {
+      onEdit(user.id);
+    }
+  };
+  
+  return (
+    <div className={`user-card ${isSelected ? 'selected' : ''}`}>
+      <h3>{name}</h3>
+      <p>{email}</p>
+      <span className="badge">{role}</span>
+      {onEdit && (
+        <button onClick={handleEditClick}>編集</button>
+      )}
+    </div>
+  );
+};
+```
+
+### 3.2 JSX構文
+- 複数行のJSXは括弧で囲む
+- 属性は1行に1つずつ記述（多数の場合）
+- 論理演算子（`&&`）や三項演算子を活用して条件付きレンダリング
+- フラグメントを使用して不要なDOMノードを減らす
+
+```tsx
+// 複数の属性がある場合
+<Button
+  variant="primary"
+  size="large"
+  disabled={isSubmitting}
+  onClick={handleSubmit}
+>
+  送信
+</Button>
+
+// 条件付きレンダリング
+{isLoggedIn && <WelcomeMessage user={currentUser} />}
+
+{isAdmin 
+  ? <AdminPanel />
+  : <UserDashboard />
+}
+
+// フラグメントの使用
+<>
+  <Header />
+  <MainContent />
+  <Footer />
+</>
+```
+
+### 3.3 Hooks使用ルール
+- フックは関数の最上位で呼び出す
+- 条件分岐内でフックを使用しない
+- カスタムフックは`use`プレフィックスを使用
+- 依存配列は常に指定する
+
+```tsx
+// 良い例
+const UserProfilePage: React.FC = () => {
+  const [user, setUser] = useState<User | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  
+  useEffect(() => {
+    const fetchUser = async () => {
+      setIsLoading(true);
+      try {
+        const data = await api.getUser();
+        setUser(data);
+      } catch (error) {
+        console.error('Failed to fetch user:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    fetchUser();
+  }, []); // 空の依存配列 - マウント時のみ実行
+  
+  // 省略...
+};
+```
+
+## 4. Python スタイル
+
+### 4.1 PEP 8準拠
+- インデントは4スペース
+- 行の最大長は100文字
+- 関数間は2行空ける
+- クラス内のメソッド間は1行空ける
+- インポートは標準ライブラリ、サードパーティ、ローカルアプリの順
+
+```python
+import os
+import sys
+from typing import List, Optional
+
+import fastapi
+from pydantic import BaseModel
+
+from app.core import config
+from app.models import user
+
+
+def format_name(first_name: str, last_name: str) -> str:
+    """名前を整形する。"""
+    return f"{last_name} {first_name}"
+
+
+def calculate_age(birth_date: date) -> int:
+    """生年月日から年齢を計算する。"""
+    today = date.today()
+    return today.year - birth_date.year - (
+        (today.month, today.day) < (birth_date.month, birth_date.day)
+    )
+
+
+class UserService:
+    def __init__(self, db_session):
+        self.db = db_session
+    
+    def get_user_by_id(self, user_id: str) -> Optional[User]:
+        """IDによるユーザー取得。"""
+        return self.db.query(User).filter(User.id == user_id).first()
+    
+    def create_user(self, user_data: dict) -> User:
+        """新規ユーザーを作成する。"""
+        user = User(**user_data)
+        self.db.add(user)
+        self.db.commit()
+        return user
+```
+
+### 4.2 型ヒント
+- すべての関数とメソッドに型ヒントを付ける
+- 複雑な型は`typing`モジュールを使用
+- 戻り値の型も必ず指定
+- コレクション要素の型を示す
+
+```python
+from typing import Dict, List, Optional, Tuple, Union
+
+def get_users_by_role(role: str) -> List[User]:
+    """指定された役割のユーザーを取得する。"""
+    return db.query(User).filter(User.role == role).all()
+
+def process_data(
+    data: Dict[str, Union[str, int, bool]],
+    options: Optional[Dict[str, str]] = None
+) -> Tuple[List[Dict[str, str]], int]:
+    """データを処理して結果と処理件数を返す。"""
+    result = []
+    # 処理ロジック
+    return result, len(result)
+```
+
+### 4.3 ドキュメンテーション
+- 関数とクラスにdocstringを記述
+- Googleスタイルのdocstringを使用
+- パラメータと戻り値の説明を含める
+- 例外がある場合は記述
+
+```python
+def transfer_points(
+    from_user_id: str,
+    to_user_id: str,
+    amount: int
+) -> bool:
+    """ユーザー間でポイントを転送する。
+
+    Args:
+        from_user_id: 送信元ユーザーID
+        to_user_id: 送信先ユーザーID
+        amount: 転送するポイント量
+
+    Returns:
+        bool: 転送が成功した場合はTrue、失敗した場合はFalse
+
+    Raises:
+        ValueError: amountが0以下の場合
+        ResourceNotFoundError: ユーザーが存在しない場合
+    """
+    if amount <= 0:
+        raise ValueError("転送ポイントは1以上である必要があります")
+    
+    # 処理ロジック
+    return True
+```
+
+## 5. SCSS/CSS スタイル
+
+### 5.1 Tailwind CSS 使用規則
+- ユーティリティクラスの順序を一貫させる
+- カスタムコンポーネントは`@apply`で抽象化
+- レスポンシブクラスは適切なブレイクポイントで使用
+- 状態バリアントは標準的な順序で記述
+
+```html
+<!-- クラスの推奨順序 -->
+<div class="
+  flex items-center justify-between  <!-- レイアウト -->
+  p-4 my-2                          <!-- スペーシング -->
+  bg-white text-gray-800            <!-- 色 -->
+  rounded-lg shadow-md              <!-- 見た目 -->
+  hover:bg-gray-50                  <!-- 状態 -->
+  sm:flex-row md:p-6                <!-- レスポンシブ -->
+">
+  コンテンツ
+</div>
+```
+
+### 5.2 カスタムCSS規則
+- BEMまたはスコープ付きCSSを使用
+- 変数はプレフィックスを付けて整理
+- メディアクエリは一貫した順序で記述
+- モバイルファーストアプローチを採用
+
+```scss
+// SCSS変数
+$color-primary: #3b82f6;
+$color-secondary: #10b981;
+$spacing-base: 16px;
+$breakpoint-sm: 640px;
+$breakpoint-md: 768px;
+
+// BEMの使用例
+.card {
+  padding: $spacing-base;
+  border-radius: 8px;
+  background-color: white;
+  
+  &__header {
+    margin-bottom: $spacing-base;
+    font-weight: bold;
+  }
+  
+  &__content {
+    line-height: 1.5;
+  }
+  
+  @media (min-width: $breakpoint-sm) {
+    padding: $spacing-base * 1.5;
+  }
+  
+  @media (min-width: $breakpoint-md) {
+    display: flex;
+    align-items: flex-start;
+  }
+}
+```
+
+## 6. SQL スタイル
+
+### 6.1 基本的なSQLフォーマット
+- キーワードは大文字
+- テーブル名とカラム名は小文字
+- 主要な句は新しい行に記述
+- インデントで階層を表現
+- 長いクエリは適切に分割
+
+```sql
+-- 推奨SQL形式
+SELECT 
+    u.id,
+    u.name,
+    u.email,
+    COUNT(o.id) AS order_count
+FROM 
+    users u
+JOIN 
+    orders o ON u.id = o.user_id
+WHERE 
+    u.is_active = TRUE
+    AND o.created_at > '2023-01-01'
+GROUP BY 
+    u.id, u.name, u.email
+HAVING 
+    COUNT(o.id) > 5
+ORDER BY 
+    order_count DESC
+LIMIT 
+    100;
+```
+
+### 6.2 複雑なクエリ
+- サブクエリには意味のある別名を付ける
+- WITH句（Common Table Expression）を活用
+- JOINの条件は明示的に記述
+- UNION/INTERSECTなどは新しい行で区切る
+
+```sql
+-- CTEの活用例
+WITH active_users AS (
+    SELECT id, name, email
+    FROM users
+    WHERE is_active = TRUE
+    AND deleted_at IS NULL
+),
+user_orders AS (
+    SELECT 
+        user_id,
+        COUNT(*) AS order_count,
+        SUM(total_amount) AS total_spent
+    FROM orders
+    WHERE status = 'completed'
+    GROUP BY user_id
+)
+SELECT 
+    u.id,
+    u.name,
+    u.email,
+    COALESCE(o.order_count, 0) AS order_count,
+    COALESCE(o.total_spent, 0) AS total_spent
+FROM 
+    active_users u
+LEFT JOIN 
+    user_orders o ON u.id = o.user_id
+ORDER BY 
+    o.total_spent DESC NULLS LAST;
+```
+
+## 7. コメント規約
+
+### 7.1 一般的なコメント規則
+- コメントは「何を」ではなく「なぜ」を説明
+- 複雑なロジックには理由を記述
+- 一時的な対応には TODO/FIXME コメントを使用
+- コードの動作を理解しにくい場合のみコメントを追加
+- 非自明な副作用がある場合はコメントで警告
+
+### 7.2 言語別コメント例
+
+**TypeScript/JavaScript**
+```typescript
+// TODO: ユーザー認証実装後にアクセス制御を追加する (JIRA: MS-123)
+
+/**
+ * 購入履歴から推奨商品を計算する
+ * アルゴリズム: 協調フィルタリングの簡易実装
+ * 注意: 計算コストが高いため、結果はキャッシュすること
+ */
+const getRecommendedProducts = (userId: string): Promise<Product[]> => {
+  // 実装...
+};
+
+// 注意: この配列の順序に依存するロジックがあるため、順序を変更しないこと
+const PRIORITY_LEVELS = ['low', 'medium', 'high', 'critical'];
+```
+
+**Python**
+```python
+# TODO: パフォーマンス最適化が必要 (JIRA: MS-456)
+
+def complex_algorithm(data):
+    """複雑なアルゴリズムの実装。
+    
+    このアルゴリズムは以下の手順で実行される：
+    1. データの正規化
+    2. 特徴抽出
+    3. クラスタリング
+    
+    注意: メモリ使用量が大きい場合があります。
+    """
+    # 実装...
+    
+    # ここでは例外的にO(n^2)の計算を許容している
+    # 理由: データセットが小さく、より高速なアルゴリズムでは精度が落ちるため
+    for i in range(len(data)):
+        for j in range(len(data)):
+            # 処理...
+```
+
+### 7.3 自動生成コードのコメント
+- 自動生成コードにはすべて「自動生成」コメントを追加
+- 編集可能/不可の領域を明示
+- 生成元と生成日時を記録
+
+```typescript
+/**
+ * このファイルは自動生成されています。
+ * 生成元: API スキーマ定義
+ * 生成日時: 2023-01-15 10:30
+ * 
+ * 警告: このファイルを直接編集しないでください！
+ */
+
+// 以下の型定義は自動生成されています
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  // ...
+}
+```
+
+## 8. コード品質ツール
+
+### 8.1 静的解析ツール
+- ESLint と Prettier を使用（JavaScript/TypeScript）
+- Flake8 と Black を使用（Python）
+- stylelint を使用（CSS/SCSS）
+- 設定ファイルをプロジェクトルートに配置
+
+```json
+// .eslintrc.json
+{
+  "extends": [
+    "eslint:recommended",
+    "plugin:@typescript-eslint/recommended",
+    "plugin:react/recommended",
+    "plugin:react-hooks/recommended",
+    "prettier"
+  ],
+  "parser": "@typescript-eslint/parser",
+  "plugins": ["@typescript-eslint", "react", "react-hooks"],
+  "rules": {
+    "no-console": ["warn", { "allow": ["warn", "error"] }],
+    "react/prop-types": "off",
+    "@typescript-eslint/explicit-module-boundary-types": "off"
+  }
+}
+```
+
+```json
+// .prettierrc
+{
+  "semi": true,
+  "singleQuote": true,
+  "tabWidth": 2,
+  "printWidth": 100,
+  "trailingComma": "all"
+}
+```
+
+### 8.2 コードレビュールール
+- PRはレビュー前に自動チェックをパスすること
+- コード標準に準拠していることを確認
+- コードの意図と実装が一致していることを確認
+- エッジケースとエラー処理をレビュー
+- セキュリティの問題をチェック
