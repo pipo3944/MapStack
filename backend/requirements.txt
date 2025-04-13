@@ -1,0 +1,17 @@
+fastapi
+uvicorn
+pydantic
+sqlalchemy
+alembic
+psycopg2-binary
+python-dotenv
+pytest
+httpx
+redis
+python-jose
+passlib
+python-multipart
+flake8
+black
+isort
+ruff 

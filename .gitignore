@@ -1,0 +1,33 @@
+# 全体共通
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.code-workspace
+.history/
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# データ関連
+*.sqlite
+*.db
+*.log
+/logs
+/data
+
+# Docker関連
+docker-volume/
+
+# 依存関係
+node_modules/
+
+# その他
+.tmp/
+.temp/
+.cache/

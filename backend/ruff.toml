@@ -1,0 +1,49 @@
+# Ruff設定ファイル
+
+# すべてのPythonファイルを対象にする
+target-version = "py312"
+line-length = 100
+
+# 有効化するルール
+select = [
+    "E",   # pycodestyle エラー
+    "F",   # pyflakes
+    "I",   # isort
+    "W",   # pycodestyle 警告
+    "C90", # mccabe
+    "N",   # pep8-naming
+    "D",   # pydocstyle
+    "UP",  # pyupgrade
+    "B",   # flake8-bugbear
+    "A",   # flake8-builtins
+    "C4",  # flake8-comprehensions
+    "T20", # flake8-print
+    "PT",  # flake8-pytest-style
+    "RET", # flake8-return
+    "SIM", # flake8-simplify
+    "ARG", # flake8-unused-arguments
+    "PL",  # pylint
+]
+
+# 除外するルール
+ignore = [
+    "D203",  # 1行のdocstringには対応しない
+    "D212",  # マルチラインdocstringのスタイル違い
+]
+
+# 無視するファイル・ディレクトリ
+exclude = [
+    ".git",
+    ".venv",
+    "__pycache__",
+    "venv",
+    "alembic",
+    "migrations",
+]
+
+[per-file-ignores]
+"__init__.py" = ["F401"]  # 使用されていないインポートを許可
+
+[isort]
+known-first-party = ["backend"]
+known-third-party = ["fastapi", "sqlalchemy", "pydantic"] 

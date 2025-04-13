@@ -1,0 +1,30 @@
+{
+  "name": "mapstack",
+  "version": "0.1.0",
+  "description": "モダンな学習プラットフォーム MapStack のモノレポリポジトリ",
+  "private": true,
+  "scripts": {
+    "install:frontend": "cd frontend && npm install",
+    "docker:build": "docker-compose build",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down",
+    "docker:logs": "docker-compose logs -f",
+    "dev": "concurrently \"npm run dev:frontend\" \"npm run docker:up\"",
+    "dev:frontend": "cd frontend && npm run dev",
+    "db:up": "docker-compose up -d db",
+    "db:migrate": "docker-compose run --rm backend alembic upgrade head",
+    "db:seed": "docker-compose run --rm backend python -m backend.scripts.seed_data",
+    "test": "concurrently \"cd frontend && npm run test\" \"cd backend && pytest\"",
+    "test:watch": "concurrently \"cd frontend && npm run test:watch\" \"cd backend && pytest --watch\"",
+    "lint": "concurrently \"cd frontend && npm run lint\" \"docker-compose run --rm backend ruff check .\"",
+    "format": "concurrently \"cd frontend && npm run format\" \"docker-compose run --rm backend ruff format .\"",
+    "build": "concurrently \"cd frontend && npm run build\" \"cd backend && echo 'Backend build'\""
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  },
+  "engines": {
+    "node": ">=14.0.0",
+    "npm": ">=7.0.0"
+  }
+}

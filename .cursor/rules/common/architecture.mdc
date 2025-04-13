@@ -48,18 +48,21 @@ graph LR
 frontend/
 ├── public/             # 静的ファイル
 ├── src/
+│   ├── app/            # Next.js App Routerのページとレイアウト
+│   │   ├── layout.tsx  # ルートレイアウト
+│   │   ├── page.tsx    # ホームページ
+│   │   └── [route]/    # 各ルートディレクトリ（例：login/）
 │   ├── components/     # 再利用可能なUIコンポーネント
 │   │   ├── common/     # 共通コンポーネント（ボタン、フォームなど）
 │   │   ├── layout/     # レイアウト関連コンポーネント
 │   │   └── features/   # 機能固有のコンポーネント
 │   ├── hooks/          # カスタムReact Hooks
-│   ├── pages/          # Next.jsのページコンポーネント
 │   ├── services/       # APIと通信するサービス
 │   ├── store/          # グローバル状態管理
-│   ├── styles/         # スタイル関連ファイル
+│   ├── styles/         # スタイル関連ファイル（globals.cssなど）
 │   ├── types/          # TypeScript型定義
 │   └── utils/          # ユーティリティ関数
-├── .eslintrc.js        # ESLint設定
+├── .eslintrc.json      # ESLint設定
 ├── .prettierrc         # Prettier設定
 ├── next.config.js      # Next.js設定
 ├── package.json        # 依存関係

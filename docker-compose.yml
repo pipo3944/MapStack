@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    volumes:
+      - ./backend:/app
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/mapstack
+      - REDIS_URL=redis://redis:6379/0
+      - ENVIRONMENT=development
+    depends_on:
+      - db
+      - redis
+    networks:
+      - mapstack-network
+    command: uvicorn backend.app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  db:
+    image: postgres:14
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=mapstack
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - mapstack-network
+
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - mapstack-network
+
+networks:
+  mapstack-network:
+    driver: bridge
+
+volumes:
+  postgres-data:
+  redis-data: 

@@ -66,7 +66,7 @@ MapStackプロジェクトでは、以下の基本原則に従って開発を進
 
 ## コーディング規約
 
-- [common/code_style](../common/code_style.md) および [common/naming](../common/naming.md) に記載された規約に従ってください
+- [common/code_style](mdc:../common/code_style.md) および [common/naming](mdc:../common/naming.md) に記載された規約に従ってください
 - フロントエンドコードはTypeScriptで記述し、適切な型付けを行ってください
 - バックエンドコードはPythonの型ヒントを活用し、Pydanticでデータ検証を行ってください
 - コメントは最小限に抑え、自己説明的なコードを心がけてください

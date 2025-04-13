@@ -1,0 +1,29 @@
+{
+  "recommendations": [
+    // 言語サポート
+    "ms-python.python", // Python拡張（Ruffサポート含む）
+    "ms-python.vscode-pylance", // Python言語サーバー
+
+    // TypeScript/JavaScript
+    "dbaeumer.vscode-eslint", // ESLint
+    "esbenp.prettier-vscode", // Prettier
+    "bradlc.vscode-tailwindcss", // Tailwind CSS
+
+    // フレームワークサポート
+    "dsznajder.es7-react-js-snippets", // React スニペット
+    "firsttris.vscode-jest-runner", // Jestテストランナー
+    "ZixuanChen.vitest-explorer", // Vitestエクスプローラー
+
+    // Docker関連
+    "ms-azuretools.vscode-docker", // Docker
+    "ms-vscode-remote.remote-containers", // Remote Containers
+
+    // 開発ツール
+    "formulahendry.auto-rename-tag", // HTMLタグの自動リネーム
+    "eamodio.gitlens", // GitLens
+    "ms-vsliveshare.vsliveshare", // Live Share
+    "streetsidesoftware.code-spell-checker", // スペルチェッカー
+    "usernamehw.errorlens", // エラー表示の強化
+    "visualstudioexptteam.vscodeintellicode" // IntelliCode
+  ]
+}
