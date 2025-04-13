@@ -8,7 +8,7 @@
       "request": "launch",
       "module": "uvicorn",
       "args": [
-        "backend.app.main:app",
+        "src.main:app",
         "--reload",
         "--host",
         "0.0.0.0",

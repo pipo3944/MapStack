@@ -676,8 +676,16 @@ export default function RoadmapPage() {
         <span className="font-medium">{roadmap.themeTitle}</span>
       </div>
 
-      <h1 className="text-3xl font-bold mb-4">{roadmap.title}</h1>
-      <p className="text-gray-600 mb-8">{roadmap.description}</p>
+      {/* ヘッダー情報とバージョン選択 */}
+      <div className="flex flex-col md:flex-row justify-between items-start mb-4">
+        <div>
+          <h1 className="text-3xl font-bold mb-2">{roadmap.title}</h1>
+          <p className="text-gray-600 mb-4">{roadmap.description}</p>
+        </div>
+        <div className="w-full md:w-64 mt-4 md:mt-0">
+          <div className="mb-2 text-sm font-medium">ロードマップバージョン</div>
+        </div>
+      </div>
 
       <div className="flex flex-col md:flex-row gap-6">
         {/* ロードマップのフローチャート */}

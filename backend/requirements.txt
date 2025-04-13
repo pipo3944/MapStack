@@ -14,4 +14,7 @@ python-multipart
 flake8
 black
 isort
-ruff 
+ruff
+packaging
+pydantic-settings
+asyncpg

@@ -67,4 +67,91 @@ export const apiService = {
   // その他のAPIエンドポイント
 };
 
+// インターフェース定義
+export interface RoadmapVersion {
+  id: string;
+  version: string;
+  title: string;
+  is_published: boolean;
+  is_latest: boolean;
+  published_at: string | null;
+  created_at: string;
+}
+
+export interface RoadmapData {
+  id: string;
+  version: string;
+  title: string;
+  description: string | null;
+  is_published: boolean;
+  is_latest: boolean;
+  published_at: string | null;
+  created_at: string;
+  theme_id: string;
+}
+
+// ロードマップのバージョン一覧を取得する
+export const getRoadmapVersions = async (themeId: string): Promise<RoadmapVersion[]> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/v1/themes/${themeId}/roadmaps/versions`);
+
+    if (!response.ok) {
+      throw new Error(`API呼び出しに失敗しました: ${response.status}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('ロードマップバージョン取得エラー:', error);
+    return [];
+  }
+};
+
+// 新しいロードマップバージョンを作成する
+export const createNewRoadmapVersion = async (
+  roadmapId: string,
+  newVersion: string
+): Promise<RoadmapData> => {
+  try {
+    const response = await fetch(
+      `${API_BASE_URL}/api/v1/roadmaps/${roadmapId}/new-version?new_version=${newVersion}`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`API呼び出しに失敗しました: ${response.status}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('新しいバージョン作成エラー:', error);
+    throw error;
+  }
+};
+
+// ロードマップを公開する
+export const publishRoadmap = async (roadmapId: string): Promise<RoadmapData> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/v1/roadmaps/${roadmapId}/publish`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`API呼び出しに失敗しました: ${response.status}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('ロードマップ公開エラー:', error);
+    throw error;
+  }
+};
+
 export default apiService;
