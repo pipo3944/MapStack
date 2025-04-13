@@ -5,13 +5,26 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
+# データベース用のスキーマをインポート
 from ....db.schemas.roadmap import (
-    Category, CategoryCreate, CategoryUpdate,
-    Theme, ThemeCreate, ThemeUpdate, ThemeWithCategory,
-    Roadmap, RoadmapCreate, RoadmapUpdate, RoadmapDetail, RoadmapVersion,
-    RoadmapNode, RoadmapNodeCreate, RoadmapNodeUpdate,
-    RoadmapEdge, RoadmapEdgeCreate, RoadmapEdgeUpdate
+    Category as CategoryDB, CategoryCreate as CategoryCreateDB, CategoryUpdate as CategoryUpdateDB,
+    Theme as ThemeDB, ThemeCreate as ThemeCreateDB, ThemeUpdate as ThemeUpdateDB, ThemeWithCategory as ThemeWithCategoryDB,
+    Roadmap as RoadmapDB, RoadmapCreate as RoadmapCreateDB, RoadmapUpdate as RoadmapUpdateDB,
+    RoadmapDetail as RoadmapDetailDB, RoadmapVersion as RoadmapVersionDB,
+    RoadmapNode as RoadmapNodeDB, RoadmapNodeCreate as RoadmapNodeCreateDB, RoadmapNodeUpdate as RoadmapNodeUpdateDB,
+    RoadmapEdge as RoadmapEdgeDB, RoadmapEdgeCreate as RoadmapEdgeCreateDB, RoadmapEdgeUpdate as RoadmapEdgeUpdateDB
 )
+
+# API用のスキーマをインポート
+from ..schemas.roadmap import (
+    CategoryResponse, CategoryCreateRequest, CategoryUpdateRequest, CategoryDetailResponse, CategoryListResponse,
+    ThemeResponse, ThemeCreateRequest, ThemeUpdateRequest, ThemeWithCategoryResponse, ThemeDetailResponse, ThemeListResponse,
+    RoadmapResponse, RoadmapCreateRequest, RoadmapUpdateRequest, RoadmapDetailResponse, RoadmapDetailApiResponse, RoadmapListResponse,
+    RoadmapNodeResponse, RoadmapNodeCreateRequest, RoadmapNodeUpdateRequest,
+    RoadmapEdgeResponse, RoadmapEdgeCreateRequest, RoadmapEdgeUpdateRequest,
+    RoadmapVersionResponse, RoadmapVersionListResponse
+)
+
 from ....services.roadmap import (
     # カテゴリ関連
     get_categories, get_category, create_category, update_category, delete_category,
@@ -19,8 +32,10 @@ from ....services.roadmap import (
     get_themes, get_theme, create_theme, update_theme, delete_theme,
     # ロードマップ関連
     get_roadmaps, get_roadmap, create_roadmap, update_roadmap,
-    get_roadmap_versions, publish_roadmap, clone_roadmap_for_new_version
-    # ノードとエッジ関連の関数はまだ実装していません
+    get_roadmap_versions, publish_roadmap, clone_roadmap_for_new_version,
+    # ノードとエッジ関連
+    get_roadmap_nodes, get_roadmap_node, create_roadmap_node, update_roadmap_node, delete_roadmap_node,
+    get_roadmap_edges, get_roadmap_edge, create_roadmap_edge, update_roadmap_edge, delete_roadmap_edge
 )
 from ....db.main import get_async_db
 # 以下のimportについては、これから作成するサービスに関するものなので、コメントアウトしておきます
@@ -38,7 +53,7 @@ router = APIRouter()
 
 
 # カテゴリ関連エンドポイント
-@router.get("/categories/", response_model=List[Category])
+@router.get("/categories/", response_model=CategoryListResponse)
 async def read_categories(
     skip: int = 0,
     limit: int = 100,
@@ -48,10 +63,12 @@ async def read_categories(
     """
     カテゴリ一覧を取得する
     """
-    return await get_categories(db, skip=skip, limit=limit, is_active=is_active)
+    categories = await get_categories(db, skip=skip, limit=limit, is_active=is_active)
+    category_responses = [CategoryResponse(**category.__dict__) for category in categories]
+    return CategoryListResponse(success=True, data=category_responses)
 
 
-@router.get("/categories/{category_id}", response_model=Category)
+@router.get("/categories/{category_id}", response_model=CategoryDetailResponse)
 async def read_category(
     category_id: UUID,
     db: AsyncSession = Depends(get_async_db)
@@ -62,24 +79,29 @@ async def read_category(
     category = await get_category(db, category_id=category_id)
     if category is None:
         raise HTTPException(status_code=404, detail="Category not found")
-    return category
+    category_response = CategoryResponse(**category.__dict__)
+    return CategoryDetailResponse(success=True, data=category_response)
 
 
-@router.post("/categories/", response_model=Category, status_code=status.HTTP_201_CREATED)
+@router.post("/categories/", response_model=CategoryDetailResponse, status_code=status.HTTP_201_CREATED)
 async def create_category_endpoint(
-    category: CategoryCreate,
+    category: CategoryCreateRequest,
     db: AsyncSession = Depends(get_async_db)
 ):
     """
     新しいカテゴリを作成する
     """
-    return await create_category(db=db, category=category)
+    # APIスキーマをDBスキーマに変換
+    db_category = CategoryCreateDB(**category.dict())
+    result = await create_category(db=db, category=db_category)
+    category_response = CategoryResponse(**result.__dict__)
+    return CategoryDetailResponse(success=True, data=category_response)
 
 
-@router.put("/categories/{category_id}", response_model=Category)
+@router.put("/categories/{category_id}", response_model=CategoryDetailResponse)
 async def update_category_endpoint(
     category_id: UUID,
-    category: CategoryUpdate,
+    category: CategoryUpdateRequest,
     db: AsyncSession = Depends(get_async_db)
 ):
     """
@@ -88,7 +110,12 @@ async def update_category_endpoint(
     db_category = await get_category(db, category_id=category_id)
     if db_category is None:
         raise HTTPException(status_code=404, detail="Category not found")
-    return await update_category(db=db, category_id=category_id, category=category)
+
+    # APIスキーマをDBスキーマに変換
+    db_category_update = CategoryUpdateDB(**category.dict(exclude_unset=True))
+    result = await update_category(db=db, category_id=category_id, category=db_category_update)
+    category_response = CategoryResponse(**result.__dict__)
+    return CategoryDetailResponse(success=True, data=category_response)
 
 
 @router.delete("/categories/{category_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -103,10 +130,11 @@ async def delete_category_endpoint(
     if db_category is None:
         raise HTTPException(status_code=404, detail="Category not found")
     await delete_category(db=db, category_id=category_id)
+    return None
 
 
 # テーマ関連エンドポイント
-@router.get("/themes/", response_model=List[Theme])
+@router.get("/themes/", response_model=ThemeListResponse)
 async def read_themes(
     skip: int = 0,
     limit: int = 100,
@@ -117,10 +145,12 @@ async def read_themes(
     """
     テーマ一覧を取得する
     """
-    return await get_themes(db, skip=skip, limit=limit, category_id=category_id, is_active=is_active)
+    themes = await get_themes(db, skip=skip, limit=limit, category_id=category_id, is_active=is_active)
+    theme_responses = [ThemeResponse(**theme.__dict__) for theme in themes]
+    return ThemeListResponse(success=True, data=theme_responses)
 
 
-@router.get("/themes/{theme_id}", response_model=ThemeWithCategory)
+@router.get("/themes/{theme_id}", response_model=ThemeDetailResponse)
 async def read_theme(
     theme_id: UUID,
     db: AsyncSession = Depends(get_async_db)
@@ -131,24 +161,51 @@ async def read_theme(
     theme = await get_theme(db, theme_id=theme_id)
     if theme is None:
         raise HTTPException(status_code=404, detail="Theme not found")
-    return theme
+
+    # テーマレスポンスの作成
+    theme_response = ThemeResponse(**theme.__dict__)
+
+    # カテゴリ情報の取得（joinedloadによりtheme.categoryで取得可能）
+    category = theme.category
+    category_response = CategoryResponse(
+        id=str(category.id),
+        title=category.title,
+        description=category.description,
+        code=category.code,
+        order_index=category.order_index,
+        is_active=category.is_active,
+        created_at=category.created_at,
+        updated_at=category.updated_at
+    )
+
+    # ThemeWithCategoryResponseを作成
+    theme_with_category_response = ThemeWithCategoryResponse(
+        **theme_response.__dict__,
+        category=category_response
+    )
+
+    return ThemeDetailResponse(success=True, data=theme_with_category_response)
 
 
-@router.post("/themes/", response_model=Theme, status_code=status.HTTP_201_CREATED)
+@router.post("/themes/", response_model=ThemeDetailResponse, status_code=status.HTTP_201_CREATED)
 async def create_theme_endpoint(
-    theme: ThemeCreate,
+    theme: ThemeCreateRequest,
     db: AsyncSession = Depends(get_async_db)
 ):
     """
     新しいテーマを作成する
     """
-    return await create_theme(db=db, theme=theme)
+    # APIスキーマをDBスキーマに変換
+    db_theme = ThemeCreateDB(**theme.dict())
+    result = await create_theme(db=db, theme=db_theme)
+    theme_response = ThemeResponse(**result.__dict__)
+    return ThemeDetailResponse(success=True, data=theme_response)
 
 
-@router.put("/themes/{theme_id}", response_model=Theme)
+@router.put("/themes/{theme_id}", response_model=ThemeDetailResponse)
 async def update_theme_endpoint(
     theme_id: UUID,
-    theme: ThemeUpdate,
+    theme: ThemeUpdateRequest,
     db: AsyncSession = Depends(get_async_db)
 ):
     """
@@ -157,7 +214,12 @@ async def update_theme_endpoint(
     db_theme = await get_theme(db, theme_id=theme_id)
     if db_theme is None:
         raise HTTPException(status_code=404, detail="Theme not found")
-    return await update_theme(db=db, theme_id=theme_id, theme=theme)
+
+    # APIスキーマをDBスキーマに変換
+    db_theme_update = ThemeUpdateDB(**theme.dict(exclude_unset=True))
+    result = await update_theme(db=db, theme_id=theme_id, theme=db_theme_update)
+    theme_response = ThemeResponse(**result.__dict__)
+    return ThemeDetailResponse(success=True, data=theme_response)
 
 
 @router.delete("/themes/{theme_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -172,10 +234,11 @@ async def delete_theme_endpoint(
     if db_theme is None:
         raise HTTPException(status_code=404, detail="Theme not found")
     await delete_theme(db=db, theme_id=theme_id)
+    return None
 
 
 # ロードマップ関連エンドポイント
-@router.get("/roadmaps/", response_model=List[Roadmap])
+@router.get("/roadmaps/", response_model=RoadmapListResponse)
 async def read_roadmaps(
     skip: int = 0,
     limit: int = 100,
@@ -187,13 +250,15 @@ async def read_roadmaps(
     """
     ロードマップ一覧を取得する
     """
-    return await get_roadmaps(
+    roadmaps = await get_roadmaps(
         db, skip=skip, limit=limit, theme_id=theme_id,
         is_published=is_published, is_latest=is_latest
     )
+    roadmap_responses = [RoadmapResponse(**roadmap.__dict__) for roadmap in roadmaps]
+    return RoadmapListResponse(success=True, data=roadmap_responses)
 
 
-@router.get("/roadmaps/{roadmap_id}", response_model=RoadmapDetail)
+@router.get("/roadmaps/{roadmap_id}", response_model=RoadmapDetailApiResponse)
 async def read_roadmap(
     roadmap_id: UUID,
     db: AsyncSession = Depends(get_async_db)
@@ -204,35 +269,45 @@ async def read_roadmap(
     roadmap = await get_roadmap(db, roadmap_id=roadmap_id)
     if roadmap is None:
         raise HTTPException(status_code=404, detail="Roadmap not found")
-    return roadmap
+    roadmap_response = RoadmapDetailResponse(**roadmap.__dict__)
+    return RoadmapDetailApiResponse(success=True, data=roadmap_response)
 
 
-@router.get("/themes/{theme_id}/roadmaps/versions", response_model=List[RoadmapVersion])
+@router.get("/themes/{theme_id}/roadmaps/versions", response_model=RoadmapVersionListResponse)
 async def read_roadmap_versions(
     theme_id: UUID,
     db: AsyncSession = Depends(get_async_db)
 ):
     """
-    特定のテーマに属するロードマップのバージョン一覧を取得する
+    特定のテーマに関連するすべてのロードマップバージョンを取得する
     """
-    return await get_roadmap_versions(db, theme_id=theme_id)
+    versions = await get_roadmap_versions(db, theme_id=theme_id)
+
+    # versions は辞書オブジェクトのリストなので、直接 RoadmapVersionResponse に渡す
+    version_responses = [RoadmapVersionResponse(**version) for version in versions]
+
+    return RoadmapVersionListResponse(success=True, data=version_responses)
 
 
-@router.post("/roadmaps/", response_model=RoadmapDetail, status_code=status.HTTP_201_CREATED)
+@router.post("/roadmaps/", response_model=RoadmapDetailApiResponse, status_code=status.HTTP_201_CREATED)
 async def create_roadmap_endpoint(
-    roadmap: RoadmapCreate,
+    roadmap: RoadmapCreateRequest,
     db: AsyncSession = Depends(get_async_db)
 ):
     """
     新しいロードマップを作成する
     """
-    return await create_roadmap(db=db, roadmap=roadmap)
+    # APIスキーマをDBスキーマに変換
+    db_roadmap = RoadmapCreateDB(**roadmap.dict())
+    result = await create_roadmap(db=db, roadmap=db_roadmap)
+    roadmap_response = RoadmapDetailResponse(**result.__dict__)
+    return RoadmapDetailApiResponse(success=True, data=roadmap_response)
 
 
-@router.put("/roadmaps/{roadmap_id}", response_model=Roadmap)
+@router.put("/roadmaps/{roadmap_id}", response_model=RoadmapDetailApiResponse)
 async def update_roadmap_endpoint(
     roadmap_id: UUID,
-    roadmap: RoadmapUpdate,
+    roadmap: RoadmapUpdateRequest,
     db: AsyncSession = Depends(get_async_db)
 ):
     """
@@ -241,21 +316,31 @@ async def update_roadmap_endpoint(
     db_roadmap = await get_roadmap(db, roadmap_id=roadmap_id)
     if db_roadmap is None:
         raise HTTPException(status_code=404, detail="Roadmap not found")
-    return await update_roadmap(db=db, roadmap_id=roadmap_id, roadmap=roadmap)
+
+    # APIスキーマをDBスキーマに変換
+    db_roadmap_update = RoadmapUpdateDB(**roadmap.dict(exclude_unset=True))
+    result = await update_roadmap(db=db, roadmap_id=roadmap_id, roadmap=db_roadmap_update)
+    roadmap_response = RoadmapDetailResponse(**result.__dict__)
+    return RoadmapDetailApiResponse(success=True, data=roadmap_response)
 
 
-@router.post("/roadmaps/{roadmap_id}/publish", response_model=Roadmap)
+@router.post("/roadmaps/{roadmap_id}/publish", response_model=RoadmapDetailApiResponse)
 async def publish_roadmap_endpoint(
     roadmap_id: UUID,
     db: AsyncSession = Depends(get_async_db)
 ):
     """
-    特定のロードマップを公開する
+    特定のロードマップを公開状態にする
     """
-    return await publish_roadmap(db=db, roadmap_id=roadmap_id)
+    db_roadmap = await get_roadmap(db, roadmap_id=roadmap_id)
+    if db_roadmap is None:
+        raise HTTPException(status_code=404, detail="Roadmap not found")
+    result = await publish_roadmap(db=db, roadmap_id=roadmap_id)
+    roadmap_response = RoadmapDetailResponse(**result.__dict__)
+    return RoadmapDetailApiResponse(success=True, data=roadmap_response)
 
 
-@router.post("/roadmaps/{roadmap_id}/new-version", response_model=Roadmap)
+@router.post("/roadmaps/{roadmap_id}/new-version", response_model=RoadmapDetailApiResponse)
 async def create_new_version_endpoint(
     roadmap_id: UUID,
     new_version: str = Query(..., description="新しいバージョン番号（セマンティックバージョニング形式、例：1.1.0）"),
@@ -264,11 +349,12 @@ async def create_new_version_endpoint(
     """
     既存のロードマップから新しいバージョンを作成する
     """
-    return await clone_roadmap_for_new_version(
-        db=db,
-        roadmap_id=roadmap_id,
-        new_version=new_version
-    )
+    db_roadmap = await get_roadmap(db, roadmap_id=roadmap_id)
+    if db_roadmap is None:
+        raise HTTPException(status_code=404, detail="Roadmap not found")
+    result = await clone_roadmap_for_new_version(db=db, roadmap_id=roadmap_id, new_version=new_version)
+    roadmap_response = RoadmapDetailResponse(**result.__dict__)
+    return RoadmapDetailApiResponse(success=True, data=roadmap_response)
 
 
 @router.delete("/roadmaps/{roadmap_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -288,120 +374,147 @@ async def delete_roadmap_endpoint(
 
 
 # ノード関連エンドポイント
-@router.get("/roadmaps/{roadmap_id}/nodes", response_model=List[RoadmapNode])
+@router.get("/roadmaps/{roadmap_id}/nodes", response_model=List[RoadmapNodeDB])
 async def read_roadmap_nodes(
     roadmap_id: UUID,
-    # db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     特定のロードマップのノード一覧を取得する
     """
-    # return await get_roadmap_nodes(db, roadmap_id=roadmap_id)
-    # 実装前なのでモックを返す
-    return []
+    nodes = await get_roadmap_nodes(db, roadmap_id=roadmap_id)
+
+    # SQLAlchemyモデルをPydanticモデルに変換する前に調整
+    result_nodes = []
+    for node in nodes:
+        # ノードデータをディクショナリに変換
+        node_dict = {
+            "id": node.id,
+            "roadmap_id": node.roadmap_id,
+            "handle": node.handle,
+            "node_type": node.node_type,
+            "title": node.title,
+            "description": node.description,
+            "position_x": node.position_x,
+            "position_y": node.position_y,
+            "metadata": dict(node.meta_data) if node.meta_data else {},  # meta_dataを辞書に変換
+            "is_required": node.is_required,
+            "created_at": node.created_at,
+            "updated_at": node.updated_at
+        }
+        result_nodes.append(node_dict)
+
+    return result_nodes
 
 
-@router.post("/roadmaps/nodes", response_model=RoadmapNode, status_code=status.HTTP_201_CREATED)
+@router.post("/roadmaps/nodes", response_model=RoadmapNodeDB, status_code=status.HTTP_201_CREATED)
 async def create_roadmap_node_endpoint(
-    node: RoadmapNodeCreate,
-    # db: AsyncSession = Depends(get_db)
+    node: RoadmapNodeCreateDB,
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     新しいロードマップノードを作成する
     """
-    # return await create_roadmap_node(db=db, node=node)
-    # 実装前なのでモックを返す
-    raise HTTPException(status_code=501, detail="Not implemented")
+    return await create_roadmap_node(db=db, node=node)
 
 
-@router.put("/roadmaps/nodes/{node_id}", response_model=RoadmapNode)
+@router.put("/roadmaps/nodes/{node_id}", response_model=RoadmapNodeDB)
 async def update_roadmap_node_endpoint(
     node_id: UUID,
-    node: RoadmapNodeUpdate,
-    # db: AsyncSession = Depends(get_db)
+    node: RoadmapNodeUpdateDB,
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     特定のロードマップノードを更新する
     """
-    # db_node = await get_roadmap_node(db, node_id=node_id)
-    # if db_node is None:
-    #     raise HTTPException(status_code=404, detail="Node not found")
-    # return await update_roadmap_node(db=db, node_id=node_id, node=node)
-    # 実装前なのでモックを返す
-    raise HTTPException(status_code=501, detail="Not implemented")
+    db_node = await get_roadmap_node(db, node_id=node_id)
+    if db_node is None:
+        raise HTTPException(status_code=404, detail="Node not found")
+    return await update_roadmap_node(db=db, node_id=node_id, node=node)
 
 
 @router.delete("/roadmaps/nodes/{node_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_roadmap_node_endpoint(
     node_id: UUID,
-    # db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     特定のロードマップノードを削除する
     """
-    # db_node = await get_roadmap_node(db, node_id=node_id)
-    # if db_node is None:
-    #     raise HTTPException(status_code=404, detail="Node not found")
-    # await delete_roadmap_node(db=db, node_id=node_id)
-    # 実装前なのでモックを返す
-    raise HTTPException(status_code=501, detail="Not implemented")
+    db_node = await get_roadmap_node(db, node_id=node_id)
+    if db_node is None:
+        raise HTTPException(status_code=404, detail="Node not found")
+    await delete_roadmap_node(db=db, node_id=node_id)
 
 
 # エッジ関連エンドポイント
-@router.get("/roadmaps/{roadmap_id}/edges", response_model=List[RoadmapEdge])
+@router.get("/roadmaps/{roadmap_id}/edges", response_model=List[RoadmapEdgeDB])
 async def read_roadmap_edges(
     roadmap_id: UUID,
-    # db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     特定のロードマップのエッジ一覧を取得する
     """
-    # return await get_roadmap_edges(db, roadmap_id=roadmap_id)
-    # 実装前なのでモックを返す
-    return []
+    edges = await get_roadmap_edges(db, roadmap_id=roadmap_id)
+
+    # SQLAlchemyモデルをPydanticモデルに変換する前に調整
+    result_edges = []
+    for edge in edges:
+        # エッジデータをディクショナリに変換
+        edge_dict = {
+            "id": edge.id,
+            "roadmap_id": edge.roadmap_id,
+            "handle": edge.handle,
+            "source_node_id": edge.source_node_id,
+            "target_node_id": edge.target_node_id,
+            "edge_type": edge.edge_type,
+            "source_handle": edge.source_handle,
+            "target_handle": edge.target_handle,
+            "metadata": dict(edge.meta_data) if edge.meta_data else {},  # meta_dataを辞書に変換
+            "created_at": edge.created_at,
+            "updated_at": edge.updated_at
+        }
+        result_edges.append(edge_dict)
+
+    return result_edges
 
 
-@router.post("/roadmaps/edges", response_model=RoadmapEdge, status_code=status.HTTP_201_CREATED)
+@router.post("/roadmaps/edges", response_model=RoadmapEdgeDB, status_code=status.HTTP_201_CREATED)
 async def create_roadmap_edge_endpoint(
-    edge: RoadmapEdgeCreate,
-    # db: AsyncSession = Depends(get_db)
+    edge: RoadmapEdgeCreateDB,
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     新しいロードマップエッジを作成する
     """
-    # return await create_roadmap_edge(db=db, edge=edge)
-    # 実装前なのでモックを返す
-    raise HTTPException(status_code=501, detail="Not implemented")
+    return await create_roadmap_edge(db=db, edge=edge)
 
 
-@router.put("/roadmaps/edges/{edge_id}", response_model=RoadmapEdge)
+@router.put("/roadmaps/edges/{edge_id}", response_model=RoadmapEdgeDB)
 async def update_roadmap_edge_endpoint(
     edge_id: UUID,
-    edge: RoadmapEdgeUpdate,
-    # db: AsyncSession = Depends(get_db)
+    edge: RoadmapEdgeUpdateDB,
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     特定のロードマップエッジを更新する
     """
-    # db_edge = await get_roadmap_edge(db, edge_id=edge_id)
-    # if db_edge is None:
-    #     raise HTTPException(status_code=404, detail="Edge not found")
-    # return await update_roadmap_edge(db=db, edge_id=edge_id, edge=edge)
-    # 実装前なのでモックを返す
-    raise HTTPException(status_code=501, detail="Not implemented")
+    db_edge = await get_roadmap_edge(db, edge_id=edge_id)
+    if db_edge is None:
+        raise HTTPException(status_code=404, detail="Edge not found")
+    return await update_roadmap_edge(db=db, edge_id=edge_id, edge=edge)
 
 
 @router.delete("/roadmaps/edges/{edge_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_roadmap_edge_endpoint(
     edge_id: UUID,
-    # db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     特定のロードマップエッジを削除する
     """
-    # db_edge = await get_roadmap_edge(db, edge_id=edge_id)
-    # if db_edge is None:
-    #     raise HTTPException(status_code=404, detail="Edge not found")
-    # await delete_roadmap_edge(db=db, edge_id=edge_id)
-    # 実装前なのでモックを返す
-    raise HTTPException(status_code=501, detail="Not implemented")
+    db_edge = await get_roadmap_edge(db, edge_id=edge_id)
+    if db_edge is None:
+        raise HTTPException(status_code=404, detail="Edge not found")
+    await delete_roadmap_edge(db=db, edge_id=edge_id)

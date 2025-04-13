@@ -17,6 +17,9 @@ app = FastAPI(
     title="MapStack API",
     description="AI学習プラットフォーム MapStack のバックエンドAPI",
     version="0.1.0",
+    openapi_url="/api/v1/openapi.json",  # OpenAPI仕様のJSONを提供するURL
+    docs_url="/api/docs",                # Swagger UIのURL
+    redoc_url="/api/redoc",              # ReDocのURL
 )
 
 # CORS設定

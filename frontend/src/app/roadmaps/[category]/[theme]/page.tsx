@@ -1,5 +1,12 @@
 'use client';
 
+import {
+  useReadCategoryApiV1CategoriesCategoryIdGet,
+  useReadRoadmapEdgesApiV1RoadmapsRoadmapIdEdgesGet,
+  useReadRoadmapNodesApiV1RoadmapsRoadmapIdNodesGet,
+  useReadRoadmapVersionsApiV1ThemesThemeIdRoadmapsVersionsGet,
+  useReadThemeApiV1ThemesThemeIdGet,
+} from '@/api/generated/roadmap/roadmap';
 import { nodeTypes } from '@/components/roadmap/RoadmapNodes';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
@@ -17,30 +24,68 @@ import ReactFlow, {
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 
-// ロードマップのデータ型定義
-interface RoadmapNode {
-  id: string;
+// リソースの型定義
+interface Resource {
   title: string;
-  description: string;
-  status?: 'not-started' | 'in-progress' | 'completed' | 'skipped';
-  type?: 'primary' | 'secondary' | 'recommended' | 'optional';
-  children?: RoadmapNode[];
-  resources?: {
-    title: string;
-    url: string;
-    type: 'article' | 'video' | 'course' | 'book' | 'docs';
-  }[];
+  url: string;
+  type: 'article' | 'video' | 'course' | 'book' | 'docs';
 }
 
-interface RoadmapData {
+// ノードデータの型定義
+interface NodeData {
+  label: string;
+  description: string;
+  nodeId: string;
+  resources?: Resource[];
+}
+
+// RoadmapVersionの型定義
+interface RoadmapVersion {
   id: string;
+  version: string;
+  title: string;
+  is_published: boolean;
+  is_latest: boolean;
+  published_at: string | null;
+  created_at: string;
+}
+
+// APIデータの型定義
+interface RoadmapNodeData {
+  id: string;
+  roadmap_id: string;
+  handle: string;
+  node_type: string;
   title: string;
   description: string;
-  categoryId: string;
-  categoryTitle: string;
-  themeId: string;
-  themeTitle: string;
-  nodes: RoadmapNode[];
+  position_x: number;
+  position_y: number;
+  meta_data: {
+    resources?: Resource[];
+    [key: string]: unknown;
+  };
+  is_required: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+interface RoadmapEdgeData {
+  id: string;
+  roadmap_id: string;
+  handle: string;
+  source_node_id: string;
+  target_node_id: string;
+  edge_type: string;
+  source_handle: string | null;
+  target_handle: string | null;
+  meta_data: {
+    style?: Record<string, unknown>;
+    animated?: boolean;
+    [key: string]: unknown;
+  };
+  label?: string;
+  created_at: string;
+  updated_at: string;
 }
 
 // カスタムノードタイプを統合
@@ -48,7 +93,44 @@ const customNodeTypes: NodeTypes = {
   ...nodeTypes,
 };
 
-// フロントエンドロードマップのノードデータ
+// APIデータをReactFlowのノードとエッジに変換する関数
+const convertApiDataToReactFlow = (apiNodes: RoadmapNodeData[], apiEdges: RoadmapEdgeData[]) => {
+  // APIから取得したノードデータをReactFlow用に変換
+  const nodes: Node[] = apiNodes.map((node) => ({
+    id: node.id,
+    type: node.node_type || 'primary', // ノードタイプがない場合はデフォルト
+    position: { x: node.position_x || 0, y: node.position_y || 0 },
+    data: {
+      label: node.title,
+      description: node.description || '',
+      nodeId: node.handle,
+      // メタデータに学習リソースがあれば変換
+      resources: node.meta_data?.resources || [],
+    },
+  }));
+
+  // APIから取得したエッジデータをReactFlow用に変換
+  const edges: Edge[] = apiEdges.map((edge) => ({
+    id: edge.id,
+    source: edge.source_node_id,
+    target: edge.target_node_id,
+    // エッジタイプが指定されていればそれを使用
+    type: edge.edge_type === 'default' ? 'smoothstep' : edge.edge_type,
+    // メタデータからスタイル情報を取得
+    style: edge.meta_data?.style || {},
+    // アニメーション設定など
+    animated: edge.meta_data?.animated || false,
+    // ハンドル情報
+    sourceHandle: edge.source_handle || null,
+    targetHandle: edge.target_handle || null,
+    // ラベルがあれば追加
+    label: edge.label || '',
+  }));
+
+  return { nodes, edges };
+};
+
+// フロントエンドのサンプルデータ（APIからデータが取得できない場合のフォールバック用）
 const getFrontendNodesAndEdges = () => {
   const nodes: Node[] = [
     {
@@ -527,60 +609,6 @@ const getFrontendNodesAndEdges = () => {
   return { nodes, edges };
 };
 
-// サンプルのロードマップデータ
-const roadmaps: Record<string, Record<string, RoadmapData>> = {
-  'web-development': {
-    frontend: {
-      id: 'frontend-development',
-      title: 'フロントエンド開発ロードマップ',
-      description:
-        'フロントエンド開発の基本から応用までのロードマップです。HTML、CSS、JavaScriptなどの必須技術から、モダンなフレームワークまで学ぶことができます。',
-      categoryId: 'web-development',
-      categoryTitle: 'Web開発',
-      themeId: 'frontend',
-      themeTitle: 'フロントエンド開発',
-      nodes: [
-        {
-          id: 'internet',
-          title: 'インターネット',
-          description:
-            'インターネットの仕組み、ブラウザの動作原理、HTTP/HTTPSプロトコルについて学ぶ',
-          type: 'primary',
-          children: [],
-          resources: [
-            {
-              title: 'インターネットの仕組み入門',
-              url: 'https://developer.mozilla.org/ja/docs/Learn/Common_questions/How_does_the_Internet_work',
-              type: 'article',
-            },
-            {
-              title: 'HTTP完全ガイド - プロトコルの基礎から実践まで',
-              url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
-              type: 'video',
-            },
-            {
-              title: 'ブラウザの仕組み：最新ウェブブラウザの内部構造',
-              url: 'https://web.dev/articles/howbrowserswork?hl=ja',
-              type: 'docs',
-            },
-            {
-              title: 'ネットワークの基礎からわかるTCP/IP入門講座',
-              url: 'https://www.udemy.com/course/tcp-ip-network/',
-              type: 'course',
-            },
-            {
-              title: 'HTTPの教科書',
-              url: 'https://www.amazon.co.jp/dp/4774142042',
-              type: 'book',
-            },
-          ],
-        },
-        // 他のノードは省略
-      ],
-    },
-  },
-};
-
 export default function RoadmapPage() {
   const params = useParams();
   const router = useRouter();
@@ -591,67 +619,171 @@ export default function RoadmapPage() {
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
 
-  // 全てのステートフックを先に定義
-  const [roadmap, setRoadmap] = useState<RoadmapData | null>(null);
-  const [selectedNode, setSelectedNode] = useState<string | null>(null);
+  // 選択中のロードマップIDとバージョン
+  const [selectedRoadmapId, setSelectedRoadmapId] = useState<string | null>(null);
+  const [roadmapVersions, setRoadmapVersions] = useState<RoadmapVersion[]>([]);
+  const [isUsingDemoData, setIsUsingDemoData] = useState(false);
 
-  // 全てのコールバックフックを定義
-  const onNodeClick = useCallback((event: React.MouseEvent, node: Node) => {
-    setSelectedNode(node.data.nodeId);
-  }, []);
+  // APIからカテゴリ情報を取得
+  const {
+    data: categoryData,
+    isLoading: isLoadingCategory,
+    error: categoryError,
+  } = useReadCategoryApiV1CategoriesCategoryIdGet(categoryId);
 
-  const getNodeData = useCallback(
-    (nodeId: string): RoadmapNode | null => {
-      if (!roadmap) return null;
+  // APIからテーマ情報を取得
+  const {
+    data: themeData,
+    isLoading: isLoadingTheme,
+    error: themeError,
+  } = useReadThemeApiV1ThemesThemeIdGet(themeId);
 
-      const findNodeRecursive = (nodes: RoadmapNode[], id: string): RoadmapNode | null => {
-        for (const node of nodes) {
-          if (node.id === id) return node;
-          if (node.children) {
-            const found = findNodeRecursive(node.children, id);
-            if (found) return found;
-          }
-        }
-        return null;
-      };
+  // APIからテーマに関連するロードマップバージョン一覧を取得
+  const {
+    data: versionsData,
+    isLoading: isLoadingVersions,
+    error: versionsError,
+  } = useReadRoadmapVersionsApiV1ThemesThemeIdRoadmapsVersionsGet(themeId);
 
-      return findNodeRecursive(roadmap.nodes, nodeId);
-    },
-    [roadmap]
-  );
+  // 選択したロードマップのノードを取得
+  const {
+    data: nodesData,
+    isLoading: isLoadingNodes,
+    error: nodesError,
+  } = useReadRoadmapNodesApiV1RoadmapsRoadmapIdNodesGet(selectedRoadmapId || '', {
+    query: { enabled: !!selectedRoadmapId },
+  });
 
-  // useEffectは最後に定義
+  // 選択したロードマップのエッジを取得
+  const {
+    data: edgesData,
+    isLoading: isLoadingEdges,
+    error: edgesError,
+  } = useReadRoadmapEdgesApiV1RoadmapsRoadmapIdEdgesGet(selectedRoadmapId || '', {
+    query: { enabled: !!selectedRoadmapId },
+  });
+
+  // ロードマップ情報のステート
+  const [roadmapInfo, setRoadmapInfo] = useState({
+    title: '',
+    description: '',
+    categoryTitle: '',
+    themeTitle: '',
+    version: '',
+  });
+
+  // 選択されたノード情報のステート
+  const [selectedNodeData, setSelectedNodeData] = useState<NodeData | null>(null);
+
+  // カテゴリーとテーマのデータが取得できたらロードマップ情報を更新
   useEffect(() => {
-    // カテゴリとテーマからロードマップデータを取得
-    if (categoryId && themeId && roadmaps[categoryId]?.[themeId]) {
-      setRoadmap(roadmaps[categoryId][themeId]);
+    if (categoryData?.success && categoryData.data && themeData?.success && themeData.data) {
+      setRoadmapInfo({
+        title: `${themeData.data.title}ロードマップ`,
+        description: themeData.data.description || '',
+        categoryTitle: categoryData.data.title,
+        themeTitle: themeData.data.title,
+        version: '',
+      });
+    }
+  }, [categoryData, themeData]);
 
-      // フロントエンド開発のロードマップの場合、React Flow用のデータを設定
-      if (categoryId === 'web-development' && themeId === 'frontend') {
+  // ロードマップバージョンデータが取得できたら処理
+  useEffect(() => {
+    if (versionsData?.success && versionsData.data && versionsData.data.length > 0) {
+      setRoadmapVersions(versionsData.data);
+
+      // 最新の公開済みバージョンを探す
+      const publishedVersions = versionsData.data.filter((v: RoadmapVersion) => v.is_published);
+      const latestVersion =
+        publishedVersions.length > 0 ? publishedVersions[0] : versionsData.data[0];
+
+      // 最新バージョンのロードマップIDを設定
+      setSelectedRoadmapId(latestVersion.id);
+
+      // バージョン情報を更新
+      setRoadmapInfo((prev) => ({
+        ...prev,
+        version: latestVersion.version,
+      }));
+    }
+  }, [versionsData]);
+
+  // ノードとエッジのデータが取得できたら処理
+  useEffect(() => {
+    if (selectedRoadmapId && nodesData && edgesData) {
+      // APIから取得したデータがある場合
+      if (nodesData.length > 0 || edgesData.length > 0) {
+        // APIのレスポンスデータを適切な型に変換
+        const apiNodes = nodesData as unknown as RoadmapNodeData[];
+        const apiEdges = edgesData as unknown as RoadmapEdgeData[];
+
+        const { nodes: flowNodes, edges: flowEdges } = convertApiDataToReactFlow(
+          apiNodes,
+          apiEdges
+        );
+        setNodes(flowNodes);
+        setEdges(flowEdges);
+
+        // 最初のノードを選択
+        if (flowNodes.length > 0) {
+          setSelectedNodeData(flowNodes[0].data as NodeData);
+        }
+
+        setIsUsingDemoData(false);
+      } else {
+        // APIからデータが取得できない場合はデモデータを使用
         const { nodes: flowNodes, edges: flowEdges } = getFrontendNodesAndEdges();
         setNodes(flowNodes);
         setEdges(flowEdges);
+
         // 最初のノードを選択
-        setSelectedNode('internet');
-      } else {
-        // 他のロードマップはまだ実装されていない
-        if (categoryId) {
-          router.push(`/roadmaps/${categoryId}`);
-        } else {
-          router.push('/roadmaps');
-        }
+        setSelectedNodeData(flowNodes[0].data as NodeData);
+
+        setIsUsingDemoData(true);
       }
-    } else {
-      // 無効なカテゴリまたはテーマの場合はカテゴリページにリダイレクト
+    }
+  }, [selectedRoadmapId, nodesData, edgesData, setNodes, setEdges]);
+
+  // ロードマップバージョン選択時の処理
+  const handleVersionChange = (versionId: string) => {
+    setSelectedRoadmapId(versionId);
+
+    // 選択したバージョンの情報を設定
+    const selectedVersion = roadmapVersions.find((v) => v.id === versionId);
+    if (selectedVersion) {
+      setRoadmapInfo((prev) => ({
+        ...prev,
+        version: selectedVersion.version,
+      }));
+    }
+  };
+
+  // ノードクリック時の処理
+  const onNodeClick = useCallback((event: React.MouseEvent, node: Node) => {
+    setSelectedNodeData(node.data as NodeData);
+  }, []);
+
+  // 初期化処理
+  useEffect(() => {
+    // APIからデータを取得する前に最初に呼び出されるため
+    // カテゴリIDとテーマIDのバリデーションのみ行う
+    if (!categoryId || !themeId) {
       if (categoryId) {
         router.push(`/roadmaps/${categoryId}`);
       } else {
         router.push('/roadmaps');
       }
     }
-  }, [categoryId, themeId, router, setNodes, setEdges]);
+  }, [categoryId, themeId, router]);
 
-  if (!roadmap) {
+  // ローディング中の表示
+  if (
+    isLoadingCategory ||
+    isLoadingTheme ||
+    isLoadingVersions ||
+    (selectedRoadmapId && (isLoadingNodes || isLoadingEdges))
+  ) {
     return (
       <div className="container mx-auto px-4 py-8 text-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
@@ -660,7 +792,37 @@ export default function RoadmapPage() {
     );
   }
 
-  const selectedNodeData = selectedNode ? getNodeData(selectedNode) : null;
+  // エラー時の表示
+  if (
+    categoryError ||
+    themeError ||
+    versionsError ||
+    (selectedRoadmapId && (nodesError || edgesError)) ||
+    !categoryData?.success ||
+    !themeData?.success
+  ) {
+    return (
+      <div className="container mx-auto px-4 py-8 text-center">
+        <h1 className="text-3xl font-bold mb-8 text-red-500">エラーが発生しました</h1>
+        <p className="text-gray-600 mb-4">
+          データの取得中に問題が発生しました。後でもう一度お試しください。
+        </p>
+        <div className="flex justify-center gap-4">
+          <button
+            onClick={() => window.location.reload()}
+            className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
+          >
+            再読み込み
+          </button>
+          <Link href={`/roadmaps/${categoryId}`}>
+            <span className="bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded inline-block">
+              カテゴリ詳細に戻る
+            </span>
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -670,20 +832,40 @@ export default function RoadmapPage() {
         </Link>
         <span className="mx-2">&#8594;</span>
         <Link href={`/roadmaps/${categoryId}`}>
-          <span className="text-blue-600 hover:underline">{roadmap.categoryTitle}</span>
+          <span className="text-blue-600 hover:underline">{roadmapInfo.categoryTitle}</span>
         </Link>
         <span className="mx-2">&#8594;</span>
-        <span className="font-medium">{roadmap.themeTitle}</span>
+        <span className="font-medium">{roadmapInfo.themeTitle}</span>
       </div>
 
       {/* ヘッダー情報とバージョン選択 */}
       <div className="flex flex-col md:flex-row justify-between items-start mb-4">
         <div>
-          <h1 className="text-3xl font-bold mb-2">{roadmap.title}</h1>
-          <p className="text-gray-600 mb-4">{roadmap.description}</p>
+          <h1 className="text-3xl font-bold mb-2">{roadmapInfo.title}</h1>
+          <p className="text-gray-600 mb-4">{roadmapInfo.description}</p>
         </div>
         <div className="w-full md:w-64 mt-4 md:mt-0">
           <div className="mb-2 text-sm font-medium">ロードマップバージョン</div>
+          {roadmapVersions.length > 0 ? (
+            <select
+              className="w-full p-2 border rounded"
+              value={selectedRoadmapId || ''}
+              onChange={(e) => handleVersionChange(e.target.value)}
+            >
+              {roadmapVersions.map((version: RoadmapVersion) => (
+                <option key={version.id} value={version.id}>
+                  {version.version} {version.is_latest ? '(最新)' : ''}{' '}
+                  {version.is_published ? '(公開済)' : '(非公開)'}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <div className="p-2 bg-gray-100 rounded text-sm">
+              {isUsingDemoData
+                ? 'バージョンがありません。デモデータを表示しています。'
+                : 'バージョン情報を取得中...'}
+            </div>
+          )}
         </div>
       </div>
 
@@ -733,14 +915,14 @@ export default function RoadmapPage() {
         <div className="md:w-1/3">
           {selectedNodeData ? (
             <div className="bg-white rounded-lg shadow-md p-6">
-              <h2 className="text-2xl font-bold mb-4">{selectedNodeData.title}</h2>
+              <h2 className="text-2xl font-bold mb-4">{selectedNodeData.label}</h2>
               <p className="text-gray-600 mb-6">{selectedNodeData.description}</p>
 
               {selectedNodeData.resources && selectedNodeData.resources.length > 0 && (
                 <>
                   <h3 className="text-xl font-semibold mb-3">学習リソース</h3>
                   <div className="space-y-4">
-                    {selectedNodeData.resources.map((resource, idx) => (
+                    {selectedNodeData.resources.map((resource: Resource, idx: number) => (
                       <div key={idx} className="p-4 border rounded-lg hover:bg-gray-50">
                         <div className="flex items-center">
                           <div className="mr-3">

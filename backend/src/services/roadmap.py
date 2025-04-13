@@ -14,7 +14,7 @@ from fastapi import HTTPException
 from packaging import version
 from sqlalchemy import select, func, and_, or_
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from ..db.models.roadmap import (
     Category, Theme, Roadmap, RoadmapNode, RoadmapEdge
@@ -135,7 +135,10 @@ async def get_theme(
     theme_id: UUID
 ) -> Optional[Theme]:
     """指定されたIDのテーマを取得する"""
-    query = select(Theme).where(Theme.id == theme_id)
+    query = select(Theme).options(
+        joinedload(Theme.category)
+    ).where(Theme.id == theme_id)
+
     result = await db.execute(query)
     return result.scalars().first()
 
@@ -492,3 +495,354 @@ async def get_roadmap_versions(
         })
 
     return versions
+
+
+# ロードマップノード関連の関数
+async def get_roadmap_nodes(
+    db: AsyncSession,
+    roadmap_id: UUID
+) -> List[RoadmapNode]:
+    """特定のロードマップのノード一覧を取得する"""
+    query = select(RoadmapNode).where(RoadmapNode.roadmap_id == roadmap_id)
+    result = await db.execute(query)
+    return result.scalars().all()
+
+
+async def get_roadmap_node(
+    db: AsyncSession,
+    node_id: UUID
+) -> Optional[RoadmapNode]:
+    """指定されたIDのロードマップノードを取得する"""
+    query = select(RoadmapNode).where(RoadmapNode.id == node_id)
+    result = await db.execute(query)
+    return result.scalars().first()
+
+
+async def create_roadmap_node(
+    db: AsyncSession,
+    node: RoadmapNodeCreate
+) -> RoadmapNode:
+    """新しいロードマップノードを作成する"""
+    # ロードマップの存在確認
+    roadmap_query = select(Roadmap).where(Roadmap.id == node.roadmap_id)
+    roadmap_result = await db.execute(roadmap_query)
+    roadmap = roadmap_result.scalars().first()
+
+    if not roadmap:
+        raise HTTPException(status_code=404, detail="Roadmap not found")
+
+    # 公開済みロードマップの場合、編集不可
+    if roadmap.is_published:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot add nodes to published roadmap"
+        )
+
+    # ノードのハンドルが重複していないか確認
+    handle_query = select(RoadmapNode).where(
+        and_(
+            RoadmapNode.roadmap_id == node.roadmap_id,
+            RoadmapNode.handle == node.handle
+        )
+    )
+    handle_result = await db.execute(handle_query)
+    existing_node = handle_result.scalars().first()
+
+    if existing_node:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Node with handle '{node.handle}' already exists in this roadmap"
+        )
+
+    # ノードデータをディクショナリに変換
+    node_data = node.dict()
+
+    # metadataフィールドがある場合はmeta_dataに変換
+    if 'metadata' in node_data:
+        node_data['meta_data'] = node_data.pop('metadata', {})
+
+    # 新しいノードを作成
+    db_node = RoadmapNode(**node_data)
+    db.add(db_node)
+    await db.commit()
+    await db.refresh(db_node)
+
+    # ディクショナリに変換して返す前にmeta_dataをmetadataに変換
+    node_dict = db_node.__dict__
+    if 'meta_data' in node_dict:
+        node_dict['metadata'] = node_dict.pop('meta_data', {})
+
+    return db_node
+
+
+async def update_roadmap_node(
+    db: AsyncSession,
+    node_id: UUID,
+    node: RoadmapNodeUpdate
+) -> RoadmapNode:
+    """既存のロードマップノードを更新する"""
+    # 既存のノードを取得
+    db_node = await get_roadmap_node(db, node_id)
+    if db_node is None:
+        raise HTTPException(status_code=404, detail="Node not found")
+
+    # ロードマップの取得
+    roadmap_query = select(Roadmap).where(Roadmap.id == db_node.roadmap_id)
+    roadmap_result = await db.execute(roadmap_query)
+    roadmap = roadmap_result.scalars().first()
+
+    # 公開済みロードマップの場合、編集不可
+    if roadmap and roadmap.is_published:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot update nodes of published roadmap"
+        )
+
+    # ハンドルが変更される場合、重複チェック
+    if node.handle is not None and node.handle != db_node.handle:
+        handle_query = select(RoadmapNode).where(
+            and_(
+                RoadmapNode.roadmap_id == db_node.roadmap_id,
+                RoadmapNode.handle == node.handle
+            )
+        )
+        handle_result = await db.execute(handle_query)
+        existing_node = handle_result.scalars().first()
+
+        if existing_node:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Node with handle '{node.handle}' already exists in this roadmap"
+            )
+
+    # 更新データを準備
+    update_data = node.dict(exclude_unset=True)
+
+    # metadataフィールドがある場合はmeta_dataに変換
+    if 'metadata' in update_data:
+        update_data['meta_data'] = update_data.pop('metadata', {})
+
+    # ノードを更新
+    for field, value in update_data.items():
+        setattr(db_node, field, value)
+
+    await db.commit()
+    await db.refresh(db_node)
+
+    return db_node
+
+
+async def delete_roadmap_node(
+    db: AsyncSession,
+    node_id: UUID
+) -> None:
+    """ロードマップノードを削除する"""
+    # 既存のノードを取得
+    db_node = await get_roadmap_node(db, node_id)
+    if db_node is None:
+        raise HTTPException(status_code=404, detail="Node not found")
+
+    # ロードマップの取得
+    roadmap_query = select(Roadmap).where(Roadmap.id == db_node.roadmap_id)
+    roadmap_result = await db.execute(roadmap_query)
+    roadmap = roadmap_result.scalars().first()
+
+    # 公開済みロードマップの場合、編集不可
+    if roadmap and roadmap.is_published:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot delete nodes from published roadmap"
+        )
+
+    # ノードを削除
+    await db.delete(db_node)
+    await db.commit()
+
+
+# ロードマップエッジ関連の関数
+async def get_roadmap_edges(
+    db: AsyncSession,
+    roadmap_id: UUID
+) -> List[RoadmapEdge]:
+    """特定のロードマップのエッジ一覧を取得する"""
+    query = select(RoadmapEdge).where(RoadmapEdge.roadmap_id == roadmap_id)
+    result = await db.execute(query)
+    return result.scalars().all()
+
+
+async def get_roadmap_edge(
+    db: AsyncSession,
+    edge_id: UUID
+) -> Optional[RoadmapEdge]:
+    """指定されたIDのロードマップエッジを取得する"""
+    query = select(RoadmapEdge).where(RoadmapEdge.id == edge_id)
+    result = await db.execute(query)
+    return result.scalars().first()
+
+
+async def create_roadmap_edge(
+    db: AsyncSession,
+    edge: RoadmapEdgeCreate
+) -> RoadmapEdge:
+    """新しいロードマップエッジを作成する"""
+    # ロードマップの存在確認
+    roadmap_query = select(Roadmap).where(Roadmap.id == edge.roadmap_id)
+    roadmap_result = await db.execute(roadmap_query)
+    roadmap = roadmap_result.scalars().first()
+
+    if not roadmap:
+        raise HTTPException(status_code=404, detail="Roadmap not found")
+
+    # 公開済みロードマップの場合、編集不可
+    if roadmap.is_published:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot add edges to published roadmap"
+        )
+
+    # ソースノードとターゲットノードの存在確認
+    source_node_query = select(RoadmapNode).where(RoadmapNode.id == edge.source_node_id)
+    source_node_result = await db.execute(source_node_query)
+    source_node = source_node_result.scalars().first()
+
+    if not source_node or source_node.roadmap_id != edge.roadmap_id:
+        raise HTTPException(status_code=404, detail="Source node not found in this roadmap")
+
+    target_node_query = select(RoadmapNode).where(RoadmapNode.id == edge.target_node_id)
+    target_node_result = await db.execute(target_node_query)
+    target_node = target_node_result.scalars().first()
+
+    if not target_node or target_node.roadmap_id != edge.roadmap_id:
+        raise HTTPException(status_code=404, detail="Target node not found in this roadmap")
+
+    # エッジのハンドルが重複していないか確認
+    handle_query = select(RoadmapEdge).where(
+        and_(
+            RoadmapEdge.roadmap_id == edge.roadmap_id,
+            RoadmapEdge.handle == edge.handle
+        )
+    )
+    handle_result = await db.execute(handle_query)
+    existing_edge = handle_result.scalars().first()
+
+    if existing_edge:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Edge with handle '{edge.handle}' already exists in this roadmap"
+        )
+
+    # エッジデータをディクショナリに変換
+    edge_data = edge.dict()
+
+    # metadataフィールドがある場合はmeta_dataに変換
+    if 'metadata' in edge_data:
+        edge_data['meta_data'] = edge_data.pop('metadata', {})
+
+    # 新しいエッジを作成
+    db_edge = RoadmapEdge(**edge_data)
+    db.add(db_edge)
+    await db.commit()
+    await db.refresh(db_edge)
+
+    return db_edge
+
+
+async def update_roadmap_edge(
+    db: AsyncSession,
+    edge_id: UUID,
+    edge: RoadmapEdgeUpdate
+) -> RoadmapEdge:
+    """既存のロードマップエッジを更新する"""
+    # 既存のエッジを取得
+    db_edge = await get_roadmap_edge(db, edge_id)
+    if db_edge is None:
+        raise HTTPException(status_code=404, detail="Edge not found")
+
+    # ロードマップの取得
+    roadmap_query = select(Roadmap).where(Roadmap.id == db_edge.roadmap_id)
+    roadmap_result = await db.execute(roadmap_query)
+    roadmap = roadmap_result.scalars().first()
+
+    # 公開済みロードマップの場合、編集不可
+    if roadmap and roadmap.is_published:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot update edges of published roadmap"
+        )
+
+    # ソースノードまたはターゲットノードが変更される場合、存在確認
+    if edge.source_node_id is not None and edge.source_node_id != db_edge.source_node_id:
+        source_node_query = select(RoadmapNode).where(RoadmapNode.id == edge.source_node_id)
+        source_node_result = await db.execute(source_node_query)
+        source_node = source_node_result.scalars().first()
+
+        if not source_node or source_node.roadmap_id != db_edge.roadmap_id:
+            raise HTTPException(status_code=404, detail="Source node not found in this roadmap")
+
+    if edge.target_node_id is not None and edge.target_node_id != db_edge.target_node_id:
+        target_node_query = select(RoadmapNode).where(RoadmapNode.id == edge.target_node_id)
+        target_node_result = await db.execute(target_node_query)
+        target_node = target_node_result.scalars().first()
+
+        if not target_node or target_node.roadmap_id != db_edge.roadmap_id:
+            raise HTTPException(status_code=404, detail="Target node not found in this roadmap")
+
+    # ハンドルが変更される場合、重複チェック
+    if edge.handle is not None and edge.handle != db_edge.handle:
+        handle_query = select(RoadmapEdge).where(
+            and_(
+                RoadmapEdge.roadmap_id == db_edge.roadmap_id,
+                RoadmapEdge.handle == edge.handle
+            )
+        )
+        handle_result = await db.execute(handle_query)
+        existing_edge = handle_result.scalars().first()
+
+        if existing_edge:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Edge with handle '{edge.handle}' already exists in this roadmap"
+            )
+
+    # 更新データを準備
+    update_data = edge.dict(exclude_unset=True)
+
+    # metadataフィールドがある場合はmeta_dataに変換
+    if 'metadata' in update_data:
+        update_data['meta_data'] = update_data.pop('metadata', {})
+
+    # エッジを更新
+    for field, value in update_data.items():
+        setattr(db_edge, field, value)
+
+    await db.commit()
+    await db.refresh(db_edge)
+
+    return db_edge
+
+
+async def delete_roadmap_edge(
+    db: AsyncSession,
+    edge_id: UUID
+) -> None:
+    """ロードマップエッジを削除する"""
+    # 既存のエッジを取得
+    db_edge = await get_roadmap_edge(db, edge_id)
+    if db_edge is None:
+        raise HTTPException(status_code=404, detail="Edge not found")
+
+    # ロードマップの取得
+    roadmap_query = select(Roadmap).where(Roadmap.id == db_edge.roadmap_id)
+    roadmap_result = await db.execute(roadmap_query)
+    roadmap = roadmap_result.scalars().first()
+
+    # 公開済みロードマップの場合、編集不可
+    if roadmap and roadmap.is_published:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot delete edges from published roadmap"
+        )
+
+    # エッジを削除
+    await db.delete(db_edge)
+    await db.commit()

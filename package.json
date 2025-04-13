@@ -18,7 +18,10 @@
     "test:watch": "concurrently \"cd frontend && npm run test:watch\" \"cd backend && pytest --watch\"",
     "lint": "concurrently \"cd frontend && npm run lint\" \"docker-compose run --rm ms-backend ruff check .\"",
     "format": "concurrently \"cd frontend && npm run format\" \"docker-compose run --rm ms-backend ruff format .\"",
-    "build": "concurrently \"cd frontend && npm run build\" \"cd backend && echo 'Backend build'\""
+    "build": "concurrently \"cd frontend && npm run build\" \"cd backend && echo 'Backend build'\"",
+    "openapi:export": "docker-compose run --rm ms-backend python -m cli export-openapi",
+    "openapi:setup": "npm run openapi:export && cd frontend && npm run api:generate",
+    "dev:with-api": "npm run openapi:export && cd frontend && npm run api:dev"
   },
   "devDependencies": {
     "concurrently": "^8.2.2"

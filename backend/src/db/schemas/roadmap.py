@@ -1,3 +1,10 @@
+"""
+ロードマップ関連のデータベーススキーマ
+
+このモジュールはデータベースとの連携に使用されるPydanticモデルを定義します。
+API用のスキーマは別途 api/v1/schemas/roadmap.py に定義されています。
+"""
+
 from datetime import datetime
 from typing import List, Optional, Dict, Any, Union
 from uuid import UUID

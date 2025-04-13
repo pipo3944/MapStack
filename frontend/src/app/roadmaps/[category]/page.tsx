@@ -1,173 +1,105 @@
 'use client';
 
+import {
+  useReadCategoryApiV1CategoriesCategoryIdGet,
+  useReadThemesApiV1ThemesGet,
+} from '@/api/generated/roadmap/roadmap';
+import { CategoryResponse, ThemeResponse } from '@/api/model';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-
-// カテゴリとテーマのデータ定義
-interface Theme {
-  id: string;
-  title: string;
-  description: string;
-  image?: string;
-}
-
-interface Category {
-  id: string;
-  title: string;
-  description: string;
-  themes: Theme[];
-}
-
-// カテゴリデータ（本来はAPIから取得するべき）
-const categoryData: Record<string, Category> = {
-  'web-development': {
-    id: 'web-development',
-    title: 'Web開発',
-    description: 'フロントエンド、バックエンド、DevOpsなどのWeb開発に関連するスキルマップ',
-    themes: [
-      {
-        id: 'frontend',
-        title: 'フロントエンド開発',
-        description: 'HTML、CSS、JavaScriptからモダンフレームワークまでのフロントエンド技術',
-        image: '/images/themes/frontend.jpg',
-      },
-      {
-        id: 'backend',
-        title: 'バックエンド開発',
-        description: 'サーバーサイド開発、API設計、データベース連携などのバックエンド技術',
-        image: '/images/themes/backend.jpg',
-      },
-      {
-        id: 'fullstack',
-        title: 'フルスタック開発',
-        description: 'フロントエンドとバックエンドの両方を扱うフルスタック開発者になるためのパス',
-        image: '/images/themes/fullstack.jpg',
-      },
-      {
-        id: 'devops',
-        title: 'DevOps',
-        description: '継続的インテグレーション、デリバリー、デプロイメントのための自動化とツール',
-        image: '/images/themes/devops.jpg',
-      },
-    ],
-  },
-  'data-science': {
-    id: 'data-science',
-    title: 'データサイエンス',
-    description: 'データ分析、機械学習、AIなどデータを活用するためのスキルマップ',
-    themes: [
-      {
-        id: 'data-analysis',
-        title: 'データ分析',
-        description: 'データの収集、クリーニング、分析、可視化の基礎スキル',
-        image: '/images/themes/data-analysis.jpg',
-      },
-      {
-        id: 'machine-learning',
-        title: '機械学習',
-        description: '機械学習アルゴリズム、モデル構築、評価手法の習得',
-        image: '/images/themes/machine-learning.jpg',
-      },
-      {
-        id: 'big-data',
-        title: 'ビッグデータ',
-        description: '大規模データの処理、分散処理フレームワークの活用',
-        image: '/images/themes/big-data.jpg',
-      },
-      {
-        id: 'deep-learning',
-        title: 'ディープラーニング',
-        description: 'ニューラルネットワーク、ディープラーニングモデルの構築と応用',
-        image: '/images/themes/deep-learning.jpg',
-      },
-    ],
-  },
-  'mobile-development': {
-    id: 'mobile-development',
-    title: 'モバイル開発',
-    description: 'iOS、Android、クロスプラットフォームなどのモバイルアプリ開発のスキルマップ',
-    themes: [
-      {
-        id: 'ios',
-        title: 'iOS開発',
-        description: 'Swift、UIKitを使ったiOSアプリケーション開発',
-        image: '/images/themes/ios.jpg',
-      },
-      {
-        id: 'android',
-        title: 'Android開発',
-        description: 'KotlinやJavaを使ったAndroidアプリケーション開発',
-        image: '/images/themes/android.jpg',
-      },
-      {
-        id: 'react-native',
-        title: 'React Native',
-        description: 'JavaScriptを使ったクロスプラットフォームモバイルアプリ開発',
-        image: '/images/themes/react-native.jpg',
-      },
-      {
-        id: 'flutter',
-        title: 'Flutter',
-        description: 'Dartを使ったクロスプラットフォームモバイルアプリ開発',
-        image: '/images/themes/flutter.jpg',
-      },
-    ],
-  },
-  infrastructure: {
-    id: 'infrastructure',
-    title: 'インフラストラクチャ',
-    description: 'クラウド、ネットワーク、サーバー管理などのインフラ関連のスキルマップ',
-    themes: [
-      {
-        id: 'cloud',
-        title: 'クラウドコンピューティング',
-        description: 'AWS、Azure、GCPなどのクラウドプラットフォーム活用スキル',
-        image: '/images/themes/cloud.jpg',
-      },
-      {
-        id: 'networking',
-        title: 'ネットワーキング',
-        description: 'ネットワークの基礎、設計、セキュリティ、トラブルシューティング',
-        image: '/images/themes/networking.jpg',
-      },
-      {
-        id: 'server-admin',
-        title: 'サーバー管理',
-        description: 'Linux/Windowsサーバーの構築、管理、最適化',
-        image: '/images/themes/server-admin.jpg',
-      },
-      {
-        id: 'containerization',
-        title: 'コンテナ技術',
-        description: 'Docker、Kubernetes、コンテナオーケストレーション',
-        image: '/images/themes/containerization.jpg',
-      },
-    ],
-  },
-};
 
 export default function CategoryPage() {
   const params = useParams();
   const router = useRouter();
   const categoryId = params?.category as string;
-  const [category, setCategory] = useState<Category | null>(null);
 
-  useEffect(() => {
-    // カテゴリIDからカテゴリデータを取得
-    if (categoryId && categoryData[categoryId]) {
-      setCategory(categoryData[categoryId]);
-    } else {
-      // 無効なカテゴリの場合はカテゴリ一覧ページにリダイレクト
-      router.push('/roadmaps');
+  // カテゴリ詳細を取得
+  const {
+    data: categoryData,
+    isLoading: isLoadingCategory,
+    error: categoryError,
+  } = useReadCategoryApiV1CategoriesCategoryIdGet(categoryId);
+
+  // そのカテゴリに紐づくテーマ一覧を取得
+  const {
+    data: themesData,
+    isLoading: isLoadingThemes,
+    error: themesError,
+  } = useReadThemesApiV1ThemesGet(
+    { category_id: categoryId },
+    {
+      query: {
+        enabled: !!categoryId,
+      },
     }
-  }, [categoryId, router]);
+  );
 
-  if (!category) {
+  const [category, setCategory] = useState<CategoryResponse | null>(null);
+  const [themes, setThemes] = useState<ThemeResponse[]>([]);
+
+  // カテゴリデータが取得できたら状態を更新
+  useEffect(() => {
+    if (categoryData?.success && categoryData.data) {
+      setCategory(categoryData.data);
+    }
+  }, [categoryData]);
+
+  // テーマデータが取得できたら状態を更新
+  useEffect(() => {
+    if (themesData?.success && themesData.data) {
+      setThemes(themesData.data);
+    }
+  }, [themesData]);
+
+  // ローディング中の表示
+  if (isLoadingCategory || isLoadingThemes) {
     return (
       <div className="container mx-auto px-4 py-8 text-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-        <p className="mt-4">カテゴリを読み込み中...</p>
+        <p className="mt-4">データを読み込み中...</p>
+      </div>
+    );
+  }
+
+  // エラーの表示
+  if (categoryError || themesError || !categoryData?.success) {
+    return (
+      <div className="container mx-auto px-4 py-8 text-center">
+        <h1 className="text-3xl font-bold mb-8 text-red-500">エラーが発生しました</h1>
+        <p className="text-gray-600 mb-4">
+          データの取得中に問題が発生しました。後でもう一度お試しください。
+        </p>
+        <div className="flex justify-center gap-4">
+          <button
+            onClick={() => window.location.reload()}
+            className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
+          >
+            再読み込み
+          </button>
+          <Link href="/roadmaps">
+            <span className="bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded inline-block">
+              カテゴリ一覧に戻る
+            </span>
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  // カテゴリが見つからない場合
+  if (!category) {
+    return (
+      <div className="container mx-auto px-4 py-8 text-center">
+        <h1 className="text-3xl font-bold mb-8 text-yellow-500">カテゴリが見つかりません</h1>
+        <p className="text-gray-600 mb-4">
+          指定されたカテゴリは存在しないか、削除された可能性があります。
+        </p>
+        <Link href="/roadmaps">
+          <span className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
+            カテゴリ一覧に戻る
+          </span>
+        </Link>
       </div>
     );
   }
@@ -185,34 +117,33 @@ export default function CategoryPage() {
       </div>
 
       <h1 className="text-3xl font-bold mb-4">{category.title}</h1>
-      <p className="text-gray-600 mb-8">{category.description}</p>
+      <p className="text-gray-600 mb-8">{category.description || ''}</p>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {category.themes.map((theme) => (
-          <div
-            key={theme.id}
-            className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow cursor-pointer"
-            onClick={() => handleThemeClick(theme.id)}
-          >
-            <div className="h-40 bg-gray-200">
-              {theme.image && (
-                <img
-                  src={theme.image}
-                  alt={theme.title}
-                  className="w-full h-full object-cover"
-                  onError={(e) => {
-                    e.currentTarget.style.display = 'none';
-                  }}
-                />
-              )}
+      {themes.length === 0 ? (
+        <div className="text-center py-8">
+          <p className="text-xl text-gray-500">このカテゴリにはテーマがまだありません</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {themes.map((theme) => (
+            <div
+              key={theme.id}
+              className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow cursor-pointer"
+              onClick={() => handleThemeClick(theme.id)}
+            >
+              <div className="h-40 bg-gray-300 flex items-center justify-center">
+                <span className="text-4xl text-gray-600 font-medium">
+                  {theme.title.substring(0, 1)}
+                </span>
+              </div>
+              <div className="p-4">
+                <h2 className="text-xl font-semibold mb-2">{theme.title}</h2>
+                <p className="text-gray-600">{theme.description || '説明はありません'}</p>
+              </div>
             </div>
-            <div className="p-4">
-              <h2 className="text-xl font-semibold mb-2">{theme.title}</h2>
-              <p className="text-gray-600">{theme.description}</p>
-            </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
