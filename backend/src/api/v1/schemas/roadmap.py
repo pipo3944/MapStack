@@ -137,6 +137,8 @@ class RoadmapEdgeResponse(BaseModel):
     handle: str
     source_node_id: UUID
     target_node_id: UUID
+    source_handle: Optional[str] = None
+    target_handle: Optional[str] = None
     edge_type: str
     label: Optional[str] = None
     metadata: Optional[Dict[str, Any]] = None

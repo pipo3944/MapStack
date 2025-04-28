@@ -374,7 +374,7 @@ async def delete_roadmap_endpoint(
 
 
 # ノード関連エンドポイント
-@router.get("/roadmaps/{roadmap_id}/nodes", response_model=List[RoadmapNodeDB])
+@router.get("/roadmaps/{roadmap_id}/nodes", response_model=List[RoadmapNodeResponse])
 async def read_roadmap_nodes(
     roadmap_id: UUID,
     db: AsyncSession = Depends(get_async_db)
@@ -407,21 +407,24 @@ async def read_roadmap_nodes(
     return result_nodes
 
 
-@router.post("/roadmaps/nodes", response_model=RoadmapNodeDB, status_code=status.HTTP_201_CREATED)
+@router.post("/roadmaps/nodes", response_model=RoadmapNodeResponse, status_code=status.HTTP_201_CREATED)
 async def create_roadmap_node_endpoint(
-    node: RoadmapNodeCreateDB,
+    node: RoadmapNodeCreateRequest,
     db: AsyncSession = Depends(get_async_db)
 ):
     """
     新しいロードマップノードを作成する
     """
-    return await create_roadmap_node(db=db, node=node)
+    # APIスキーマをDBスキーマに変換
+    db_node = RoadmapNodeCreateDB(**node.dict())
+    result = await create_roadmap_node(db=db, node=db_node)
+    return result
 
 
-@router.put("/roadmaps/nodes/{node_id}", response_model=RoadmapNodeDB)
+@router.put("/roadmaps/nodes/{node_id}", response_model=RoadmapNodeResponse)
 async def update_roadmap_node_endpoint(
     node_id: UUID,
-    node: RoadmapNodeUpdateDB,
+    node: RoadmapNodeUpdateRequest,
     db: AsyncSession = Depends(get_async_db)
 ):
     """
@@ -430,7 +433,10 @@ async def update_roadmap_node_endpoint(
     db_node = await get_roadmap_node(db, node_id=node_id)
     if db_node is None:
         raise HTTPException(status_code=404, detail="Node not found")
-    return await update_roadmap_node(db=db, node_id=node_id, node=node)
+    # APIスキーマをDBスキーマに変換
+    db_node_update = RoadmapNodeUpdateDB(**node.dict(exclude_unset=True))
+    result = await update_roadmap_node(db=db, node_id=node_id, node=db_node_update)
+    return result
 
 
 @router.delete("/roadmaps/nodes/{node_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -448,7 +454,7 @@ async def delete_roadmap_node_endpoint(
 
 
 # エッジ関連エンドポイント
-@router.get("/roadmaps/{roadmap_id}/edges", response_model=List[RoadmapEdgeDB])
+@router.get("/roadmaps/{roadmap_id}/edges", response_model=List[RoadmapEdgeResponse])
 async def read_roadmap_edges(
     roadmap_id: UUID,
     db: AsyncSession = Depends(get_async_db)
@@ -456,9 +462,10 @@ async def read_roadmap_edges(
     """
     特定のロードマップのエッジ一覧を取得する
     """
+    print("Fetching edges for roadmap:", roadmap_id)
     edges = await get_roadmap_edges(db, roadmap_id=roadmap_id)
+    print("Found edges:", edges)
 
-    # SQLAlchemyモデルをPydanticモデルに変換する前に調整
     result_edges = []
     for edge in edges:
         # エッジデータをディクショナリに変換
@@ -471,30 +478,34 @@ async def read_roadmap_edges(
             "edge_type": edge.edge_type,
             "source_handle": edge.source_handle,
             "target_handle": edge.target_handle,
-            "metadata": dict(edge.meta_data) if edge.meta_data else {},  # meta_dataを辞書に変換
+            "metadata": dict(edge.meta_data) if edge.meta_data else None,  # Noneに変更
             "created_at": edge.created_at,
             "updated_at": edge.updated_at
         }
         result_edges.append(edge_dict)
 
+    print("Returning edges:", result_edges)
     return result_edges
 
 
-@router.post("/roadmaps/edges", response_model=RoadmapEdgeDB, status_code=status.HTTP_201_CREATED)
+@router.post("/roadmaps/edges", response_model=RoadmapEdgeResponse, status_code=status.HTTP_201_CREATED)
 async def create_roadmap_edge_endpoint(
-    edge: RoadmapEdgeCreateDB,
+    edge: RoadmapEdgeCreateRequest,
     db: AsyncSession = Depends(get_async_db)
 ):
     """
     新しいロードマップエッジを作成する
     """
-    return await create_roadmap_edge(db=db, edge=edge)
+    # APIスキーマをDBスキーマに変換
+    db_edge = RoadmapEdgeCreateDB(**edge.dict())
+    result = await create_roadmap_edge(db=db, edge=db_edge)
+    return result
 
 
-@router.put("/roadmaps/edges/{edge_id}", response_model=RoadmapEdgeDB)
+@router.put("/roadmaps/edges/{edge_id}", response_model=RoadmapEdgeResponse)
 async def update_roadmap_edge_endpoint(
     edge_id: UUID,
-    edge: RoadmapEdgeUpdateDB,
+    edge: RoadmapEdgeUpdateRequest,
     db: AsyncSession = Depends(get_async_db)
 ):
     """
@@ -503,7 +514,10 @@ async def update_roadmap_edge_endpoint(
     db_edge = await get_roadmap_edge(db, edge_id=edge_id)
     if db_edge is None:
         raise HTTPException(status_code=404, detail="Edge not found")
-    return await update_roadmap_edge(db=db, edge_id=edge_id, edge=edge)
+    # APIスキーマをDBスキーマに変換
+    db_edge_update = RoadmapEdgeUpdateDB(**edge.dict(exclude_unset=True))
+    result = await update_roadmap_edge(db=db, edge_id=edge_id, edge=db_edge_update)
+    return result
 
 
 @router.delete("/roadmaps/edges/{edge_id}", status_code=status.HTTP_204_NO_CONTENT)
