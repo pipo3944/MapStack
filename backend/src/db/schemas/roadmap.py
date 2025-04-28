@@ -118,6 +118,8 @@ class RoadmapEdgeBase(BaseModel):
     target_node_id: UUID
     edge_type: str = "default"
     label: Optional[str] = None
+    source_handle: Optional[str] = None
+    target_handle: Optional[str] = None
     metadata: Optional[Dict[str, Any]] = None
 
 
