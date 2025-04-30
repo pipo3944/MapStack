@@ -6,4 +6,5 @@ MapStackのサービスレイヤーパッケージ
 """
 
 from .roadmap import RoadmapService
-from .document import VersionUtility, DocumentDiffUtility, DocumentStorageService
+from .document import VersionUtility, DocumentDiffUtility, DocumentService, DocumentStorageService
+from .storage import StorageService, LocalStorageService, MinioStorageService, get_storage_service

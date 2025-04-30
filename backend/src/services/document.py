@@ -19,8 +19,11 @@ from sqlalchemy.orm import Session, joinedload
 from ..db.models.document import Document, DocumentRevision, NodeDocumentLink
 from ..db.models.roadmap import RoadmapNode
 from ..api.v1.schemas.document import DocumentContentBase, DocumentSectionBase, DocumentRevisionDiff
+from ..config.settings import get_settings
+from .storage import get_storage_service, StorageService
 
 logger = logging.getLogger(__name__)
+settings = get_settings()
 
 
 class VersionUtility:
@@ -200,28 +203,69 @@ class DocumentDiffUtility:
         )
 
 
-class DocumentStorageService:
-    """ドキュメントコンテンツのストレージサービス"""
+class DocumentService:
+    """ドキュメントコンテンツの管理サービス"""
 
-    def __init__(self, base_storage_path: str = "storage"):
+    def __init__(self):
         """
+        ストレージサービスを初期化する
+        """
+        self.storage = get_storage_service()
+
+    async def save_content(self, content: Dict, document_id: Union[UUID, str], version: str) -> str:
+        """
+        コンテンツを保存する
+
         Args:
-            base_storage_path: ストレージのベースディレクトリ
-        """
-        self.base_path = base_storage_path
-
-    def get_document_path(self, document_id: Union[UUID, str], version: str) -> str:
-        """
-        ドキュメントのストレージパスを取得する
-
-        Args:
+            content: 保存するコンテンツデータ
             document_id: ドキュメントID
             version: ドキュメントバージョン
 
         Returns:
-            ストレージパス
+            ストレージキー
         """
-        return os.path.join(self.base_path, "documents", str(document_id), f"{version}.json")
+        return await self.storage.save_content(content, document_id, version)
+
+    async def load_content(self, storage_key: str) -> Dict:
+        """
+        コンテンツを読み込む
+
+        Args:
+            storage_key: ストレージキー
+
+        Returns:
+            読み込んだコンテンツデータ
+
+        Raises:
+            FileNotFoundError: 指定されたキーのコンテンツが見つからない場合
+        """
+        return await self.storage.load_content(storage_key)
+
+    async def delete_content(self, storage_key: str) -> bool:
+        """
+        コンテンツを削除する
+
+        Args:
+            storage_key: ストレージキー
+
+        Returns:
+            削除が成功した場合はTrue、それ以外はFalse
+        """
+        return await self.storage.delete_content(storage_key)
+
+    async def list_document_versions(self, document_id: Union[UUID, str]) -> List[str]:
+        """
+        ドキュメントの全バージョンのストレージキーを取得する
+
+        Args:
+            document_id: ドキュメントID
+
+        Returns:
+            ストレージキーのリスト
+        """
+        prefix = f"documents/{document_id}"
+        keys = await self.storage.list_contents(prefix)
+        return keys
 
     def get_storage_key(self, document_id: Union[UUID, str], version: str) -> str:
         """
@@ -234,71 +278,8 @@ class DocumentStorageService:
         Returns:
             ストレージキー
         """
-        return os.path.join("documents", str(document_id), f"{version}.json")
+        return self.storage.get_storage_key(document_id, version)
 
-    def save_content(self, content: Dict, document_id: Union[UUID, str], version: str) -> str:
-        """
-        コンテンツをファイルに保存する
 
-        Args:
-            content: 保存するコンテンツデータ
-            document_id: ドキュメントID
-            version: ドキュメントバージョン
-
-        Returns:
-            ストレージキー
-        """
-        # ドキュメント保存ディレクトリ
-        doc_dir = os.path.dirname(self.get_document_path(document_id, version))
-
-        # ディレクトリが存在しない場合は作成
-        os.makedirs(doc_dir, exist_ok=True)
-
-        # ファイルパス
-        file_path = self.get_document_path(document_id, version)
-
-        # JSONとして保存
-        with open(file_path, 'w', encoding='utf-8') as f:
-            json.dump(content, f, ensure_ascii=False, indent=2)
-
-        # ストレージキーを返す
-        return self.get_storage_key(document_id, version)
-
-    def load_content(self, storage_key: str) -> Dict:
-        """
-        ストレージキーからコンテンツを読み込む
-
-        Args:
-            storage_key: コンテンツのストレージキー
-
-        Returns:
-            読み込まれたコンテンツデータ
-        """
-        file_path = os.path.join(self.base_path, storage_key)
-
-        # ファイルが存在しない場合はエラー
-        if not os.path.exists(file_path):
-            raise FileNotFoundError(f"コンテンツファイルが見つかりません: {file_path}")
-
-        # JSONとして読み込み
-        with open(file_path, 'r', encoding='utf-8') as f:
-            return json.load(f)
-
-    def delete_content(self, storage_key: str) -> bool:
-        """
-        ストレージキーのコンテンツを削除する
-
-        Args:
-            storage_key: 削除するコンテンツのストレージキー
-
-        Returns:
-            削除に成功した場合はTrue
-        """
-        file_path = os.path.join(self.base_path, storage_key)
-
-        # ファイルが存在する場合は削除
-        if os.path.exists(file_path):
-            os.remove(file_path)
-            return True
-
-        return False
+# 後方互換性のためのエイリアス
+DocumentStorageService = DocumentService

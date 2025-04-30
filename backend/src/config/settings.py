@@ -29,6 +29,17 @@ class Settings(BaseSettings):
     REDIS_HOST: str = os.getenv("REDIS_HOST", "ms-redis")
     REDIS_PORT: str = os.getenv("REDIS_PORT", "6379")
 
+    # ストレージ設定
+    STORAGE_TYPE: str = os.getenv("STORAGE_TYPE", "local")  # 'local', 'minio', 's3'
+
+    # MinIO/S3設定
+    MINIO_ROOT_USER: str = os.getenv("MINIO_ROOT_USER", "minioadmin")
+    MINIO_ROOT_PASSWORD: str = os.getenv("MINIO_ROOT_PASSWORD", "minioadmin")
+    MINIO_ENDPOINT: str = os.getenv("MINIO_ENDPOINT", "ms-minio")
+    MINIO_PORT: str = os.getenv("MINIO_PORT", "9000")
+    MINIO_USE_SSL: bool = os.getenv("MINIO_USE_SSL", "false").lower() == "true"
+    MINIO_BUCKET_NAME: str = os.getenv("MINIO_BUCKET_NAME", "mapstack-documents")
+
     @computed_field
     @property
     def REDIS_URL(self) -> str:

@@ -8,6 +8,7 @@ services:
     volumes:
       - ./backend:/app
       - ./.env:/app/.env
+      - ./storage:/app/storage
     ports:
       - "8000:8000"
     env_file:
@@ -15,6 +16,7 @@ services:
     depends_on:
       - ms-db
       - ms-redis
+      - ms-minio
     networks:
       - mapstack-network
     command: uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
@@ -43,6 +45,20 @@ services:
     networks:
       - mapstack-network
 
+  ms-minio:
+    image: minio/minio:latest
+    ports:
+      - "9000:9000" # APIエンドポイント
+      - "9001:9001" # 管理コンソール
+    environment:
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
+    volumes:
+      - minio-data:/data
+    networks:
+      - mapstack-network
+    command: server --console-address ":9001" /data
+
 networks:
   mapstack-network:
     driver: bridge
@@ -50,3 +66,4 @@ networks:
 volumes:
   postgres-data:
   redis-data:
+  minio-data:
