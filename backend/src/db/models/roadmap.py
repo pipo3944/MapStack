@@ -102,6 +102,7 @@ class RoadmapNode(Base):
     roadmap = relationship('Roadmap', back_populates='nodes')
     outgoing_edges = relationship('RoadmapEdge', foreign_keys='RoadmapEdge.source_node_id', back_populates='source_node')
     incoming_edges = relationship('RoadmapEdge', foreign_keys='RoadmapEdge.target_node_id', back_populates='target_node')
+    document_links = relationship('NodeDocumentLink', back_populates='node', cascade='all, delete-orphan')
 
     # インデックス・制約
     __table_args__ = (
