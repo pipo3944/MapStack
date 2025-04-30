@@ -9,7 +9,7 @@ from datetime import datetime
 from typing import List, Optional, Dict, Any, Union
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 
 class DocumentBase(BaseModel):
@@ -35,8 +35,7 @@ class Document(DocumentBase):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class DocumentRevisionBase(BaseModel):
@@ -62,8 +61,7 @@ class DocumentRevision(DocumentRevisionBase):
     id: UUID
     created_at: datetime
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class NodeDocumentLinkBase(BaseModel):
@@ -84,8 +82,7 @@ class NodeDocumentLink(NodeDocumentLinkBase):
     id: UUID
     created_at: datetime
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class DocumentWithRevisions(Document):
@@ -101,5 +98,4 @@ class NodeWithDocuments(BaseModel):
     node_type: str
     documents: List[Document]
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)

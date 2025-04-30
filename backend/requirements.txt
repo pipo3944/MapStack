@@ -6,6 +6,7 @@ alembic
 psycopg2-binary
 python-dotenv
 pytest
+pytest-asyncio
 httpx
 redis
 python-jose

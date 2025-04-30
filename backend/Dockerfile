@@ -8,6 +8,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
+# PYTHONPATHを設定し、アプリケーションルートディレクトリを含める
+ENV PYTHONPATH=/app:$PYTHONPATH
+
 EXPOSE 8000
 
 CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]

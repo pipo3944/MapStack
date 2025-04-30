@@ -1,7 +1,8 @@
 """
 SQLAlchemyのベースモデルとORM関連の基本設定
 """
-from sqlalchemy.ext.declarative import declarative_base
+# 非推奨のimportを新しい形式に変更
+from sqlalchemy.orm import declarative_base
 
 # モデル定義のベースクラス
 Base = declarative_base()

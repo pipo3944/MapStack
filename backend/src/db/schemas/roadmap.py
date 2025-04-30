@@ -9,7 +9,7 @@ from datetime import datetime
 from typing import List, Optional, Dict, Any, Union
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 
 class CategoryBase(BaseModel):
@@ -37,8 +37,7 @@ class Category(CategoryBase):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ThemeBase(BaseModel):
@@ -68,8 +67,7 @@ class Theme(ThemeBase):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ThemeWithCategory(Theme):
@@ -108,8 +106,7 @@ class RoadmapNode(RoadmapNodeBase):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class RoadmapEdgeBase(BaseModel):
@@ -142,8 +139,7 @@ class RoadmapEdge(RoadmapEdgeBase):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class RoadmapBase(BaseModel):
@@ -176,8 +172,7 @@ class Roadmap(RoadmapBase):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class RoadmapDetail(Roadmap):
@@ -195,5 +190,4 @@ class RoadmapVersion(BaseModel):
     published_at: Optional[datetime]
     created_at: datetime
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)

@@ -17,6 +17,11 @@ class ErrorResponse(BaseModel):
     message: str
     details: Optional[Dict[str, Any]] = None
 
+class PaginationParams(BaseModel):
+    """ページネーションリクエストパラメータ"""
+    page: int = 1
+    limit: int = 20
+
 class PaginationMeta(BaseModel):
     """ページネーション情報"""
     current_page: int
