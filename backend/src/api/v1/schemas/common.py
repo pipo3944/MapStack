@@ -22,6 +22,12 @@ class PaginationParams(BaseModel):
     page: int = 1
     limit: int = 20
 
+    # per_pageとlimitの互換性のために追加
+    @property
+    def per_page(self) -> int:
+        """limit属性のエイリアスとしてper_pageを提供"""
+        return self.limit
+
 class PaginationMeta(BaseModel):
     """ページネーション情報"""
     current_page: int

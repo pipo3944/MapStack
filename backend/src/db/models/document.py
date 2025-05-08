@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 from sqlalchemy import Column, String, ForeignKey, Integer, Text, DateTime, UniqueConstraint, Index
-from sqlalchemy.dialects.postgresql import UUID
+from src.db.types import GUID
 from sqlalchemy.orm import relationship
 
 from ..base import Base
@@ -10,7 +10,7 @@ from ..base import Base
 class Document(Base):
     __tablename__ = 'documents'
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id = Column(GUID(), primary_key=True, default=uuid.uuid4)
     title = Column(String(200), nullable=False)
     description = Column(Text)
     created_at = Column(DateTime(timezone=True), default=datetime.now)
@@ -29,12 +29,12 @@ class Document(Base):
 class DocumentRevision(Base):
     __tablename__ = 'document_revisions'
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    document_id = Column(UUID(as_uuid=True), ForeignKey('documents.id', ondelete='CASCADE'), nullable=False)
+    id = Column(GUID(), primary_key=True, default=uuid.uuid4)
+    document_id = Column(GUID(), ForeignKey('documents.id', ondelete='CASCADE'), nullable=False)
     version = Column(String(20), nullable=False)
     storage_key = Column(String(255), nullable=False)
     change_summary = Column(Text)
-    created_by = Column(UUID(as_uuid=True))
+    created_by = Column(GUID())
     created_at = Column(DateTime(timezone=True), default=datetime.now)
 
     # リレーションシップ
@@ -50,9 +50,9 @@ class DocumentRevision(Base):
 class NodeDocumentLink(Base):
     __tablename__ = 'node_document_links'
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    node_id = Column(UUID(as_uuid=True), ForeignKey('roadmap_nodes.id', ondelete='CASCADE'), nullable=False)
-    document_id = Column(UUID(as_uuid=True), ForeignKey('documents.id', ondelete='CASCADE'), nullable=False)
+    id = Column(GUID(), primary_key=True, default=uuid.uuid4)
+    node_id = Column(GUID(), ForeignKey('roadmap_nodes.id', ondelete='CASCADE'), nullable=False)
+    document_id = Column(GUID(), ForeignKey('documents.id', ondelete='CASCADE'), nullable=False)
     order_position = Column(Integer)
     relation_type = Column(String(50), nullable=False, default='primary')
     created_at = Column(DateTime(timezone=True), default=datetime.now)

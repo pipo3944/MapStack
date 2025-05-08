@@ -128,15 +128,16 @@ class TestMinioStorageService:
 
     @pytest.fixture
     def mock_minio_client(self):
-        """MinIOクライアントをモックする"""
-        with patch('src.services.storage.Minio', autospec=True) as mock_minio:
-            # Minioクライアントのモック
-            mock_client = MagicMock()
-            mock_minio.return_value = mock_client
-
-            # バケット存在チェックのモック
-            mock_client.bucket_exists.return_value = True
-            yield mock_client
+        """MinIOクライアントをダミークラスでモックする"""
+        class DummyMinioClient:
+            def __init__(self):
+                self.put_object = MagicMock()
+                self.get_object = MagicMock()
+                self.remove_object = MagicMock()
+                self.list_objects = MagicMock()
+                self.bucket_exists = MagicMock(return_value=True)
+        with patch('src.services.storage.Minio', return_value=DummyMinioClient()) as mock_minio:
+            yield mock_minio.return_value
 
     @pytest.fixture
     def minio_storage(self, mock_settings, mock_minio_client):
@@ -204,15 +205,14 @@ class TestMinioStorageService:
         """MinIOのコンテンツリスト取得をテストする"""
         prefix = f"documents/{TEST_DOCUMENT_ID}"
 
-        # list_objectsのモック応答を設定
-        mock_obj1 = MagicMock()
-        mock_obj1.object_name = f"{prefix}/1.0.0.json"
+        # list_objectsのダミー応答を設定
+        class MinioObject:
+            def __init__(self, object_name):
+                self.object_name = object_name
 
-        mock_obj2 = MagicMock()
-        mock_obj2.object_name = f"{prefix}/1.1.0.json"
-
-        mock_obj3 = MagicMock()
-        mock_obj3.object_name = f"{prefix}/data.txt"  # JSONでないファイル
+        mock_obj1 = MinioObject(f"{prefix}/1.0.0.json")
+        mock_obj2 = MinioObject(f"{prefix}/1.1.0.json")
+        mock_obj3 = MinioObject(f"{prefix}/data.txt")  # JSONでないファイル
 
         mock_minio_client.list_objects.return_value = [mock_obj1, mock_obj2, mock_obj3]
 

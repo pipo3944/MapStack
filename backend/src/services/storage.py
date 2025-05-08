@@ -17,7 +17,9 @@ from minio import Minio
 from minio.error import S3Error
 from fastapi import HTTPException
 
-from ..config import settings
+from ..config.settings import get_settings
+
+settings = get_settings()
 
 logger = logging.getLogger(__name__)
 

@@ -66,20 +66,36 @@ class DocumentRevisionResponse(DocumentRevisionBase):
     document_id: UUID
     created_by: Optional[UUID] = None
 
+    model_config = {
+        "from_attributes": True
+    }
+
 
 class DocumentRevisionContentResponse(DocumentRevisionResponse):
     """リビジョンコンテンツ付きレスポンス"""
     content: DocumentContentBase
+
+    model_config = {
+        "from_attributes": True
+    }
 
 
 class DocumentWithRevisionsResponse(DocumentResponse):
     """リビジョン履歴付きドキュメント情報レスポンス"""
     revisions: List[DocumentRevisionResponse]
 
+    model_config = {
+        "from_attributes": True
+    }
+
 
 class DocumentDetailResponse(DocumentResponse):
     """最新リビジョン情報付きドキュメント詳細レスポンス"""
     latest_revision: DocumentRevisionResponse
+
+    model_config = {
+        "from_attributes": True
+    }
 
 
 class NodeDocumentLinkBase(BaseModel):
@@ -130,3 +146,12 @@ class DocumentRevisionDiff(BaseModel):
     sections_added: List[DocumentSectionBase] = []
     sections_removed: List[DocumentSectionBase] = []
     sections_modified: List[Dict[str, Any]] = []
+
+
+SectionDiff = DocumentSectionBase
+
+class ModifiedSection(BaseModel):
+    """セクションの差分情報（修正された場合）"""
+    title: str
+    old_content: str
+    new_content: str
