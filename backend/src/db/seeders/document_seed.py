@@ -112,7 +112,7 @@ sample_documents = [
                 }
             }
         ],
-        "nodes": ["javascript-basics"]
+        "nodes": ["js-basics"]
     }
 ]
 
@@ -141,16 +141,38 @@ async def seed_document_data(session: AsyncSession) -> None:
 
     # ドキュメントの作成
     for doc_data in sample_documents:
-        # ドキュメントを作成
-        doc = Document(
-            title=doc_data["title"],
-            description=doc_data["description"]
-        )
-        session.add(doc)
-        await session.flush()
+        # ドキュメントが既に存在するか確認
+        existing_doc_query = select(Document).where(Document.title == doc_data["title"])
+        existing_doc_result = await session.execute(existing_doc_query)
+        existing_doc = existing_doc_result.scalar_one_or_none()
 
-        # リビジョンを作成
+        if existing_doc:
+            logger.info(f"既存ドキュメントを使用: {doc_data['title']}")
+            doc = existing_doc
+        else:
+            # 新規ドキュメントを作成
+            doc = Document(
+                title=doc_data["title"],
+                description=doc_data["description"]
+            )
+            session.add(doc)
+            await session.flush()
+            logger.info(f"新規ドキュメントを作成: {doc_data['title']}")
+
+        # リビジョンを作成 (既存ドキュメントの場合は既存のリビジョンをチェック)
         for rev_data in doc_data["revisions"]:
+            # リビジョンが既に存在するか確認
+            existing_rev_query = select(DocumentRevision).where(
+                DocumentRevision.document_id == doc.id,
+                DocumentRevision.version == rev_data["version"]
+            )
+            existing_rev_result = await session.execute(existing_rev_query)
+            existing_rev = existing_rev_result.scalar_one_or_none()
+
+            if existing_rev:
+                logger.info(f"既存リビジョンをスキップ: {doc.title} v{rev_data['version']}")
+                continue
+
             # コンテンツを保存
             storage_key = await save_document_content(rev_data["content"], str(doc.id), rev_data["version"])
 
@@ -163,10 +185,24 @@ async def seed_document_data(session: AsyncSession) -> None:
                 created_by=None  # 実際の環境では認証ユーザーのIDを設定
             )
             session.add(rev)
+            logger.info(f"新規リビジョンを作成: {doc.title} v{rev_data['version']}")
 
-        # ノードとの関連付け
+        # ノードとの関連付け (既存のリンクをチェック)
         for i, node_handle in enumerate(doc_data["nodes"]):
             if node_handle in node_mapping:
+                # リンクが既に存在するか確認
+                existing_link_query = select(NodeDocumentLink).where(
+                    NodeDocumentLink.node_id == node_mapping[node_handle],
+                    NodeDocumentLink.document_id == doc.id
+                )
+                existing_link_result = await session.execute(existing_link_query)
+                existing_link = existing_link_result.scalar_one_or_none()
+
+                if existing_link:
+                    logger.info(f"既存ノードリンクをスキップ: {node_handle} -> {doc.title}")
+                    continue
+
+                # 新規リンクを作成
                 link = NodeDocumentLink(
                     node_id=node_mapping[node_handle],
                     document_id=doc.id,
@@ -174,6 +210,7 @@ async def seed_document_data(session: AsyncSession) -> None:
                     relation_type="primary"
                 )
                 session.add(link)
+                logger.info(f"新規ノードリンクを作成: {node_handle} -> {doc.title}")
             else:
                 logger.warning(f"ノードハンドル '{node_handle}' に対応するノードが見つかりません")
 
@@ -181,7 +218,7 @@ async def seed_document_data(session: AsyncSession) -> None:
     logger.info("ドキュメントデータのシードが完了しました")
 
 def seed_document_data_sync(session: Session) -> None:
-    """初期ドキュメントデータをデータベースに投入する"""
+    """初期ドキュメントデータをデータベースに投入する（同期版）"""
     logger.info("ドキュメントデータの投入を開始します...")
 
     # ノードハンドルとIDのマッピングを取得
@@ -192,16 +229,38 @@ def seed_document_data_sync(session: Session) -> None:
 
     # ドキュメントの作成
     for doc_data in sample_documents:
-        # ドキュメントを作成
-        doc = Document(
-            title=doc_data["title"],
-            description=doc_data["description"]
-        )
-        session.add(doc)
-        session.flush()
+        # ドキュメントが既に存在するか確認
+        existing_doc_query = select(Document).where(Document.title == doc_data["title"])
+        existing_doc_result = session.execute(existing_doc_query)
+        existing_doc = existing_doc_result.scalar_one_or_none()
 
-        # リビジョンを作成
+        if existing_doc:
+            logger.info(f"既存ドキュメントを使用: {doc_data['title']}")
+            doc = existing_doc
+        else:
+            # 新規ドキュメントを作成
+            doc = Document(
+                title=doc_data["title"],
+                description=doc_data["description"]
+            )
+            session.add(doc)
+            session.flush()
+            logger.info(f"新規ドキュメントを作成: {doc_data['title']}")
+
+        # リビジョンを作成 (既存ドキュメントの場合は既存のリビジョンをチェック)
         for rev_data in doc_data["revisions"]:
+            # リビジョンが既に存在するか確認
+            existing_rev_query = select(DocumentRevision).where(
+                DocumentRevision.document_id == doc.id,
+                DocumentRevision.version == rev_data["version"]
+            )
+            existing_rev_result = session.execute(existing_rev_query)
+            existing_rev = existing_rev_result.scalar_one_or_none()
+
+            if existing_rev:
+                logger.info(f"既存リビジョンをスキップ: {doc.title} v{rev_data['version']}")
+                continue
+
             # 同期版でのコンテンツ保存
             # 同期処理では非同期のStorageServiceを直接使用できないため、
             # ローカルストレージに直接保存する簡易的な方法を使用
@@ -221,10 +280,24 @@ def seed_document_data_sync(session: Session) -> None:
                 created_by=None  # 実際の環境では認証ユーザーのIDを設定
             )
             session.add(rev)
+            logger.info(f"新規リビジョンを作成: {doc.title} v{rev_data['version']}")
 
-        # ノードとの関連付け
+        # ノードとの関連付け (既存のリンクをチェック)
         for i, node_handle in enumerate(doc_data["nodes"]):
             if node_handle in node_mapping:
+                # リンクが既に存在するか確認
+                existing_link_query = select(NodeDocumentLink).where(
+                    NodeDocumentLink.node_id == node_mapping[node_handle],
+                    NodeDocumentLink.document_id == doc.id
+                )
+                existing_link_result = session.execute(existing_link_query)
+                existing_link = existing_link_result.scalar_one_or_none()
+
+                if existing_link:
+                    logger.info(f"既存ノードリンクをスキップ: {node_handle} -> {doc.title}")
+                    continue
+
+                # 新規リンクを作成
                 link = NodeDocumentLink(
                     node_id=node_mapping[node_handle],
                     document_id=doc.id,
@@ -232,6 +305,7 @@ def seed_document_data_sync(session: Session) -> None:
                     relation_type="primary"
                 )
                 session.add(link)
+                logger.info(f"新規ノードリンクを作成: {node_handle} -> {doc.title}")
             else:
                 logger.warning(f"ノードハンドル '{node_handle}' に対応するノードが見つかりません")
 

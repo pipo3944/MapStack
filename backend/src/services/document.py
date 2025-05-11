@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session, joinedload, selectinload
 
 from ..db.models.document import Document, DocumentRevision, NodeDocumentLink
 from ..db.models.roadmap import RoadmapNode
-from ..api.v1.schemas.document import DocumentContentBase, DocumentSectionBase, DocumentRevisionDiff, SectionDiff, ModifiedSection, DocumentSearchParams
+from ..api.v1.schemas.document import DocumentContentBase, DocumentSectionBase, DocumentRevisionDiff, SectionDiff, ModifiedSection, DocumentSearchParams, DocumentRevisionContentResponse
 from ..config.settings import get_settings
 from .storage import get_storage_service, StorageService
 
@@ -265,8 +265,9 @@ class DocumentDiffUtility:
 class DocumentService:
     """ドキュメントとリビジョン管理サービス"""
 
-    def __init__(self):
+    def __init__(self, db: Optional[AsyncSession] = None):
         """初期化"""
+        self.db = db
         self.storage_service = get_storage_service()
 
     # ストレージ関連のメソッド
@@ -296,35 +297,47 @@ class DocumentService:
         return self.storage_service.get_storage_key(str(document_id), version)
 
     # ドキュメント操作メソッド
-    async def get_document(self, db: AsyncSession, document_id: UUID) -> Optional[Document]:
+    async def get_document(self, document_id: UUID) -> Optional[Document]:
         """ドキュメントを取得する（リビジョンも事前ロード）"""
+        if not self.db:
+            raise ValueError("Database session is required for this operation")
+
         query = select(Document).where(Document.id == document_id).options(selectinload(Document.revisions))
-        result = await db.execute(query)
+        result = self.db.execute(query)
         return result.scalar_one_or_none()
 
-    async def get_document_with_revisions(self, db: AsyncSession, document_id: UUID) -> Optional[Document]:
+    async def get_document_with_revisions(self, document_id: UUID) -> Optional[Document]:
         """リビジョン情報付きでドキュメントを取得する"""
+        if not self.db:
+            raise ValueError("Database session is required for this operation")
+
         query = (
             select(Document)
             .where(Document.id == document_id)
             .options(selectinload(Document.revisions))
         )
-        result = await db.execute(query)
+        result = self.db.execute(query)
         return result.scalar_one_or_none()
 
-    async def get_latest_revision(self, db: AsyncSession, document_id: UUID) -> Optional[DocumentRevision]:
+    async def get_latest_revision(self, document_id: UUID) -> Optional[DocumentRevision]:
         """最新のリビジョンを取得する"""
+        if not self.db:
+            raise ValueError("Database session is required for this operation")
+
         query = (
             select(DocumentRevision)
             .where(DocumentRevision.document_id == document_id)
             .order_by(desc(DocumentRevision.created_at))
             .limit(1)
         )
-        result = await db.execute(query)
+        result = self.db.execute(query)
         return result.scalar_one_or_none()
 
-    async def get_revision_by_version(self, db: AsyncSession, document_id: UUID, version: str) -> Optional[DocumentRevision]:
+    async def get_revision_by_version(self, document_id: UUID, version: str) -> Optional[DocumentRevision]:
         """指定バージョンのリビジョンを取得する"""
+        if not self.db:
+            raise ValueError("Database session is required for this operation")
+
         query = (
             select(DocumentRevision)
             .where(
@@ -332,12 +345,11 @@ class DocumentService:
                 DocumentRevision.version == version
             )
         )
-        result = await db.execute(query)
+        result = self.db.execute(query)
         return result.scalar_one_or_none()
 
     async def search_documents(
         self,
-        db: AsyncSession,
         params: DocumentSearchParams
     ) -> Tuple[List[Document], int]:
         """ドキュメントを検索する"""
@@ -361,7 +373,7 @@ class DocumentService:
             count_query = count_query.where(node_filter)
 
         # 合計件数を取得
-        count_result = await db.execute(count_query)
+        count_result = self.db.execute(count_query)
         total = count_result.scalar_one()
 
         # ソートの適用
@@ -381,36 +393,58 @@ class DocumentService:
         query = query.offset((params.page - 1) * params.per_page).limit(params.per_page)
 
         # クエリ実行
-        result = await db.execute(query)
+        result = self.db.execute(query)
         documents = result.scalars().all()
 
         return documents, total
 
-    async def get_node_documents(self, db: AsyncSession, node_id: UUID) -> Tuple[Optional[RoadmapNode], List[Document]]:
-        """指定されたノードに関連付けられたドキュメント一覧を取得する"""
-        # ノードの取得
-        node_query = select(RoadmapNode).where(RoadmapNode.id == node_id)
-        node_result = await db.execute(node_query)
+    async def get_node_documents(self, node_id: Union[UUID, str]) -> Tuple[Optional[RoadmapNode], List[Document]]:
+        """指定されたノードに関連付けられたドキュメント一覧を取得する
+
+        Args:
+            node_id: ノードID（UUID形式）またはノードハンドル名
+
+        Returns:
+            ノードとドキュメントのタプル
+        """
+        # IDがUUID形式かどうかをチェック
+        is_uuid = True
+        try:
+            if isinstance(node_id, str):
+                uuid_obj = UUID(node_id)
+            else:
+                uuid_obj = node_id
+        except ValueError:
+            is_uuid = False
+
+        # ノードの取得（UUIDの場合はID、文字列の場合はハンドルで検索）
+        if is_uuid:
+            node_query = select(RoadmapNode).where(RoadmapNode.id == uuid_obj)
+        else:
+            # 文字列の場合はハンドル名として検索
+            node_query = select(RoadmapNode).where(RoadmapNode.handle == node_id)
+
+        node_result = self.db.execute(node_query)
         node = node_result.scalar_one_or_none()
 
         if not node:
+            # ノードが見つからない場合は空のリストを返す
             return None, []
 
         # 関連ドキュメントの取得
         docs_query = (
             select(Document)
             .join(NodeDocumentLink, NodeDocumentLink.document_id == Document.id)
-            .where(NodeDocumentLink.node_id == node_id)
+            .where(NodeDocumentLink.node_id == node.id)  # ノードのIDを使用
             .order_by(NodeDocumentLink.order_position)
         )
-        docs_result = await db.execute(docs_query)
+        docs_result = self.db.execute(docs_query)
         documents = docs_result.scalars().all()
 
         return node, documents
 
     async def create_document(
         self,
-        db: AsyncSession,
         title: str,
         description: Optional[str],
         content: Dict[str, Any],
@@ -427,7 +461,7 @@ class DocumentService:
             created_at=now,
             updated_at=now
         )
-        db.add(document)
+        self.db.add(document)
 
         # 初期リビジョンの作成
         initial_version = "1.0.0"
@@ -441,10 +475,10 @@ class DocumentService:
             created_by=created_by,
             created_at=now
         )
-        db.add(revision)
+        self.db.add(revision)
 
         # DBに保存
-        await db.flush()
+        await self.db.flush()
 
         # コンテンツをストレージに保存
         await self.save_content(content, document.id, initial_version)
@@ -453,7 +487,6 @@ class DocumentService:
 
     async def update_document(
         self,
-        db: AsyncSession,
         document_id: UUID,
         content: Dict[str, Any],
         version_type: str = "minor",
@@ -462,11 +495,11 @@ class DocumentService:
     ) -> Tuple[Document, DocumentRevision]:
         """ドキュメントを更新して新しいリビジョンを作成する"""
         # ドキュメントとその最新リビジョンを取得
-        document = await self.get_document(db, document_id)
+        document = await self.get_document(document_id)
         if not document:
             raise ValueError(f"Document with ID {document_id} not found")
 
-        latest_revision = await self.get_latest_revision(db, document_id)
+        latest_revision = await self.get_latest_revision(document_id)
         if not latest_revision:
             raise ValueError(f"No revisions found for document {document_id}")
 
@@ -494,14 +527,14 @@ class DocumentService:
             created_by=created_by,
             created_at=now
         )
-        db.add(new_revision)
+        self.db.add(new_revision)
 
         # ドキュメントの更新日時を更新
         document.updated_at = now
         if "title" in content:
             document.title = content["title"]
 
-        await db.flush()
+        await self.db.flush()
 
         # コンテンツをストレージに保存
         await self.save_content(content, document_id, new_version)
@@ -510,7 +543,6 @@ class DocumentService:
 
     async def link_node_document(
         self,
-        db: AsyncSession,
         node_id: UUID,
         document_id: UUID,
         relation_type: str = "primary",
@@ -519,14 +551,14 @@ class DocumentService:
         """ノードとドキュメントを関連付ける"""
         # ノードとドキュメントの存在確認
         node_query = select(RoadmapNode).where(RoadmapNode.id == node_id)
-        node_result = await db.execute(node_query)
+        node_result = self.db.execute(node_query)
         node = node_result.scalar_one_or_none()
 
         if not node:
             raise ValueError(f"Node with ID {node_id} not found")
 
         doc_query = select(Document).where(Document.id == document_id)
-        doc_result = await db.execute(doc_query)
+        doc_result = self.db.execute(doc_query)
         document = doc_result.scalar_one_or_none()
 
         if not document:
@@ -537,7 +569,7 @@ class DocumentService:
             NodeDocumentLink.node_id == node_id,
             NodeDocumentLink.document_id == document_id
         )
-        existing_result = await db.execute(existing_query)
+        existing_result = self.db.execute(existing_query)
         existing_link = existing_result.scalar_one_or_none()
 
         if existing_link:
@@ -547,14 +579,14 @@ class DocumentService:
             if order_position is not None:
                 existing_link.order_position = order_position
 
-            await db.flush()
+            await self.db.flush()
             return existing_link
 
         # 新しい関連付けを作成
         if order_position is None:
             # 最大の順序位置を取得
             max_order_query = select(func.max(NodeDocumentLink.order_position)).where(NodeDocumentLink.node_id == node_id)
-            max_order_result = await db.execute(max_order_query)
+            max_order_result = self.db.execute(max_order_query)
             max_order = max_order_result.scalar_one_or_none() or 0
             order_position = max_order + 100  # 100単位で余裕を持たせる
 
@@ -566,29 +598,78 @@ class DocumentService:
             order_position=order_position,
             created_at=datetime.now(UTC)
         )
-        db.add(link)
-        await db.flush()
+        self.db.add(link)
+        await self.db.flush()
 
         return link
 
-    async def unlink_node_document(self, db: AsyncSession, node_id: UUID, document_id: UUID) -> bool:
+    async def unlink_node_document(self, node_id: UUID, document_id: UUID) -> bool:
         """ノードとドキュメントの関連付けを解除する"""
         # 関連付けを検索
         query = select(NodeDocumentLink).where(
             NodeDocumentLink.node_id == node_id,
             NodeDocumentLink.document_id == document_id
         )
-        result = await db.execute(query)
+        result = self.db.execute(query)
         link = result.scalar_one_or_none()
 
         if not link:
             return False
 
         # 関連付けを削除
-        await db.delete(link)
-        await db.flush()
+        await self.db.delete(link)
+        await self.db.flush()
 
         return True
+
+    # コンテンツ取得メソッド
+    async def get_latest_content(self, document_id: UUID) -> DocumentRevisionContentResponse:
+        """ドキュメントの最新コンテンツを取得する"""
+        if not self.db:
+            raise ValueError("Database session is required for this operation")
+
+        # 最新のリビジョンを取得
+        latest_revision = await self.get_latest_revision(document_id)
+        if not latest_revision:
+            raise DocumentNotFoundError(f"Document with ID {document_id} not found or has no revisions")
+
+        # ストレージからコンテンツを取得
+        content = await self.load_content(latest_revision.storage_key)
+
+        # レスポンスを構築
+        return DocumentRevisionContentResponse(
+            id=latest_revision.id,
+            document_id=document_id,
+            version=latest_revision.version,
+            created_at=latest_revision.created_at,
+            change_summary=latest_revision.change_summary,
+            created_by=latest_revision.created_by,
+            content=DocumentContentBase(**content)
+        )
+
+    async def get_version_content(self, document_id: UUID, version: str) -> DocumentRevisionContentResponse:
+        """ドキュメントの特定バージョンのコンテンツを取得する"""
+        if not self.db:
+            raise ValueError("Database session is required for this operation")
+
+        # 指定されたバージョンのリビジョンを取得
+        revision = await self.get_revision_by_version(document_id, version)
+        if not revision:
+            raise ValueError(f"Version {version} not found for document {document_id}")
+
+        # ストレージからコンテンツを取得
+        content = await self.load_content(revision.storage_key)
+
+        # レスポンスを構築
+        return DocumentRevisionContentResponse(
+            id=revision.id,
+            document_id=document_id,
+            version=revision.version,
+            created_at=revision.created_at,
+            change_summary=revision.change_summary,
+            created_by=revision.created_by,
+            content=DocumentContentBase(**content)
+        )
 
 
 # 後方互換性のためのエイリアス

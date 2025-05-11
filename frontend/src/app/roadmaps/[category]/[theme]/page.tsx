@@ -7,7 +7,9 @@ import {
   useReadRoadmapVersionsApiV1ThemesThemeIdRoadmapsVersionsGet,
   useReadThemeApiV1ThemesThemeIdGet,
 } from '@/api/generated/roadmap/roadmap';
+import { NodeDocumentSection } from '@/components/roadmap';
 import { nodeTypes } from '@/components/roadmap/RoadmapNodes';
+import { isUuid } from '@/utils/nodeHandleMapping';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
@@ -967,6 +969,26 @@ export default function RoadmapPage() {
                     ))}
                   </div>
                 </>
+              )}
+
+              {/* ノードに関連するドキュメント一覧を表示 */}
+              {selectedNodeData.nodeId && (
+                <div className="mt-8">
+                  <h3 className="text-xl font-semibold mb-3">関連ドキュメント</h3>
+
+                  {/* どのノードIDの場合でも常にドキュメントの取得を試みる */}
+                  <NodeDocumentSection nodeId={selectedNodeData.nodeId} />
+
+                  {/* 開発環境のデバッグ情報表示 - 非表示にするなら削除可能 */}
+                  {process.env.NODE_ENV === 'development' && !isUuid(selectedNodeData.nodeId) && (
+                    <div className="mt-4 p-3 bg-gray-50 text-gray-500 text-xs rounded">
+                      <p className="font-medium">開発者情報</p>
+                      <p>ノードID: {selectedNodeData.nodeId} (UUIDではない)</p>
+                      <p>ノードハンドル名を使用して関連ドキュメントを取得しています。</p>
+                      <p>バックエンドAPIは、UUIDかハンドル名を適切に識別する必要があります。</p>
+                    </div>
+                  )}
+                </div>
               )}
 
               <div className="mt-8 flex flex-wrap justify-center">

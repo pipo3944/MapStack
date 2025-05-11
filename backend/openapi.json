@@ -982,7 +982,7 @@
                 "schema": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/RoadmapNode"
+                    "$ref": "#/components/schemas/RoadmapNodeResponse"
                   },
                   "title": "Response Read Roadmap Nodes Api V1 Roadmaps  Roadmap Id  Nodes Get"
                 }
@@ -1014,7 +1014,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/RoadmapNodeCreate"
+                "$ref": "#/components/schemas/RoadmapNodeCreateRequest"
               }
             }
           },
@@ -1026,7 +1026,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/RoadmapNode"
+                  "$ref": "#/components/schemas/RoadmapNodeResponse"
                 }
               }
             }
@@ -1069,7 +1069,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/RoadmapNodeUpdate"
+                "$ref": "#/components/schemas/RoadmapNodeUpdateRequest"
               }
             }
           }
@@ -1080,7 +1080,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/RoadmapNode"
+                  "$ref": "#/components/schemas/RoadmapNodeResponse"
                 }
               }
             }
@@ -1161,7 +1161,7 @@
                 "schema": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/RoadmapEdge"
+                    "$ref": "#/components/schemas/RoadmapEdgeResponse"
                   },
                   "title": "Response Read Roadmap Edges Api V1 Roadmaps  Roadmap Id  Edges Get"
                 }
@@ -1193,7 +1193,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/RoadmapEdgeCreate"
+                "$ref": "#/components/schemas/RoadmapEdgeCreateRequest"
               }
             }
           },
@@ -1205,7 +1205,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/RoadmapEdge"
+                  "$ref": "#/components/schemas/RoadmapEdgeResponse"
                 }
               }
             }
@@ -1248,7 +1248,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/RoadmapEdgeUpdate"
+                "$ref": "#/components/schemas/RoadmapEdgeUpdateRequest"
               }
             }
           }
@@ -1259,7 +1259,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/RoadmapEdge"
+                  "$ref": "#/components/schemas/RoadmapEdgeResponse"
                 }
               }
             }
@@ -1293,6 +1293,624 @@
               "format": "uuid",
               "title": "Edge Id"
             }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/documents/": {
+      "get": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Get Documents",
+        "description": "ドキュメント一覧を取得する",
+        "operationId": "get_documents_api_v1_documents__get",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 1,
+              "title": "Page"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 20,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "title_contains",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Title Contains"
+            }
+          },
+          {
+            "name": "node_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Node Id"
+            }
+          },
+          {
+            "name": "sort_by",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "updated_at",
+              "title": "Sort By"
+            }
+          },
+          {
+            "name": "sort_order",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "desc",
+              "title": "Sort Order"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedDocumentResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Create Document",
+        "description": "新規ドキュメントを作成する",
+        "operationId": "create_document_api_v1_documents__post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DocumentCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/documents/{document_id}": {
+      "get": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Get Document",
+        "description": "指定されたIDのドキュメント詳細を取得する",
+        "operationId": "get_document_api_v1_documents__document_id__get",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "ドキュメントID",
+              "title": "Document Id"
+            },
+            "description": "ドキュメントID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentDetailResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Update Document",
+        "description": "ドキュメントを更新して新しいリビジョンを作成する",
+        "operationId": "update_document_api_v1_documents__document_id__put",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "ドキュメントID",
+              "title": "Document Id"
+            },
+            "description": "ドキュメントID"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DocumentRevisionCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentRevisionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/documents/{document_id}/content": {
+      "get": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Get Document Content",
+        "description": "指定されたドキュメントの最新コンテンツを取得する",
+        "operationId": "get_document_content_api_v1_documents__document_id__content_get",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "ドキュメントID",
+              "title": "Document Id"
+            },
+            "description": "ドキュメントID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentRevisionContentResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/documents/{document_id}/content/version/{version}": {
+      "get": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Get Document Version Content",
+        "description": "指定されたドキュメントの特定バージョンのコンテンツを取得する",
+        "operationId": "get_document_version_content_api_v1_documents__document_id__content_version__version__get",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "ドキュメントID",
+              "title": "Document Id"
+            },
+            "description": "ドキュメントID"
+          },
+          {
+            "name": "version",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "バージョン番号",
+              "title": "Version"
+            },
+            "description": "バージョン番号"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentRevisionContentResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/documents/{document_id}/revisions": {
+      "get": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Get Document Revisions",
+        "description": "指定されたドキュメントのバージョン履歴を取得する",
+        "operationId": "get_document_revisions_api_v1_documents__document_id__revisions_get",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "ドキュメントID",
+              "title": "Document Id"
+            },
+            "description": "ドキュメントID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentWithRevisionsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/documents/{document_id}/diff": {
+      "get": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Get Document Diff",
+        "description": "指定されたドキュメントの2つのバージョン間の差分を取得する",
+        "operationId": "get_document_diff_api_v1_documents__document_id__diff_get",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "ドキュメントID",
+              "title": "Document Id"
+            },
+            "description": "ドキュメントID"
+          },
+          {
+            "name": "from_version",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "比較元バージョン",
+              "title": "From Version"
+            },
+            "description": "比較元バージョン"
+          },
+          {
+            "name": "to_version",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "比較先バージョン",
+              "title": "To Version"
+            },
+            "description": "比較先バージョン"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentRevisionDiff"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/nodes/{node_id}/documents": {
+      "get": {
+        "tags": [
+          "nodes",
+          "documents"
+        ],
+        "summary": "Get Node Documents",
+        "description": "指定されたノードに関連するドキュメント一覧を取得する",
+        "operationId": "get_node_documents_api_v1_nodes__node_id__documents_get",
+        "parameters": [
+          {
+            "name": "node_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "ノードID",
+              "title": "Node Id"
+            },
+            "description": "ノードID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NodeDocumentsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "nodes",
+          "documents"
+        ],
+        "summary": "Link Node Document",
+        "description": "ノードとドキュメントを関連付ける",
+        "operationId": "link_node_document_api_v1_nodes__node_id__documents_post",
+        "parameters": [
+          {
+            "name": "node_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "ノードID",
+              "title": "Node Id"
+            },
+            "description": "ノードID"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NodeDocumentLinkCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NodeDocumentLinkResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/nodes/{node_id}/documents/{document_id}": {
+      "delete": {
+        "tags": [
+          "nodes",
+          "documents"
+        ],
+        "summary": "Unlink Node Document",
+        "description": "ノードとドキュメントの関連付けを解除する",
+        "operationId": "unlink_node_document_api_v1_nodes__node_id__documents__document_id__delete",
+        "parameters": [
+          {
+            "name": "node_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "ノードID",
+              "title": "Node Id"
+            },
+            "description": "ノードID"
+          },
+          {
+            "name": "document_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "ドキュメントID",
+              "title": "Document Id"
+            },
+            "description": "ドキュメントID"
           }
         ],
         "responses": {
@@ -1547,6 +2165,404 @@
         "title": "CategoryUpdateRequest",
         "description": "カテゴリの更新リクエストスキーマ"
       },
+      "DocumentContentBase": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "sections": {
+            "items": {
+              "$ref": "#/components/schemas/DocumentSectionBase"
+            },
+            "type": "array",
+            "title": "Sections"
+          }
+        },
+        "type": "object",
+        "required": [
+          "title",
+          "sections"
+        ],
+        "title": "DocumentContentBase",
+        "description": "ドキュメントコンテンツの基本構造"
+      },
+      "DocumentCreate": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "content": {
+            "$ref": "#/components/schemas/DocumentContentBase"
+          }
+        },
+        "type": "object",
+        "required": [
+          "title",
+          "content"
+        ],
+        "title": "DocumentCreate",
+        "description": "ドキュメント作成リクエスト"
+      },
+      "DocumentDetailResponse": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          },
+          "latest_revision": {
+            "$ref": "#/components/schemas/DocumentRevisionResponse"
+          }
+        },
+        "type": "object",
+        "required": [
+          "title",
+          "id",
+          "created_at",
+          "updated_at",
+          "latest_revision"
+        ],
+        "title": "DocumentDetailResponse",
+        "description": "最新リビジョン情報付きドキュメント詳細レスポンス"
+      },
+      "DocumentResponse": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "title",
+          "id",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "DocumentResponse",
+        "description": "ドキュメント情報レスポンス"
+      },
+      "DocumentRevisionContentResponse": {
+        "properties": {
+          "version": {
+            "type": "string",
+            "title": "Version"
+          },
+          "change_summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Change Summary"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "document_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Document Id"
+          },
+          "created_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By"
+          },
+          "content": {
+            "$ref": "#/components/schemas/DocumentContentBase"
+          }
+        },
+        "type": "object",
+        "required": [
+          "version",
+          "created_at",
+          "id",
+          "document_id",
+          "content"
+        ],
+        "title": "DocumentRevisionContentResponse",
+        "description": "リビジョンコンテンツ付きレスポンス"
+      },
+      "DocumentRevisionCreate": {
+        "properties": {
+          "content": {
+            "$ref": "#/components/schemas/DocumentContentBase"
+          },
+          "change_summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Change Summary"
+          },
+          "version_type": {
+            "type": "string",
+            "title": "Version Type",
+            "default": "minor"
+          }
+        },
+        "type": "object",
+        "required": [
+          "content"
+        ],
+        "title": "DocumentRevisionCreate",
+        "description": "リビジョン作成リクエスト"
+      },
+      "DocumentRevisionDiff": {
+        "properties": {
+          "from_version": {
+            "type": "string",
+            "title": "From Version"
+          },
+          "to_version": {
+            "type": "string",
+            "title": "To Version"
+          },
+          "sections_added": {
+            "items": {
+              "$ref": "#/components/schemas/DocumentSectionBase"
+            },
+            "type": "array",
+            "title": "Sections Added",
+            "default": []
+          },
+          "sections_removed": {
+            "items": {
+              "$ref": "#/components/schemas/DocumentSectionBase"
+            },
+            "type": "array",
+            "title": "Sections Removed",
+            "default": []
+          },
+          "sections_modified": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Sections Modified",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "from_version",
+          "to_version"
+        ],
+        "title": "DocumentRevisionDiff",
+        "description": "リビジョン間の差分情報"
+      },
+      "DocumentRevisionResponse": {
+        "properties": {
+          "version": {
+            "type": "string",
+            "title": "Version"
+          },
+          "change_summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Change Summary"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "document_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Document Id"
+          },
+          "created_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By"
+          }
+        },
+        "type": "object",
+        "required": [
+          "version",
+          "created_at",
+          "id",
+          "document_id"
+        ],
+        "title": "DocumentRevisionResponse",
+        "description": "リビジョン情報レスポンス"
+      },
+      "DocumentSectionBase": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "content": {
+            "type": "string",
+            "title": "Content"
+          }
+        },
+        "type": "object",
+        "required": [
+          "title",
+          "content"
+        ],
+        "title": "DocumentSectionBase",
+        "description": "ドキュメントセクション基本クラス"
+      },
+      "DocumentWithRevisionsResponse": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          },
+          "revisions": {
+            "items": {
+              "$ref": "#/components/schemas/DocumentRevisionResponse"
+            },
+            "type": "array",
+            "title": "Revisions"
+          }
+        },
+        "type": "object",
+        "required": [
+          "title",
+          "id",
+          "created_at",
+          "updated_at",
+          "revisions"
+        ],
+        "title": "DocumentWithRevisionsResponse",
+        "description": "リビジョン履歴付きドキュメント情報レスポンス"
+      },
       "ErrorResponse": {
         "properties": {
           "code": {
@@ -1590,6 +2606,164 @@
         },
         "type": "object",
         "title": "HTTPValidationError"
+      },
+      "NodeDocumentLinkCreate": {
+        "properties": {
+          "relation_type": {
+            "type": "string",
+            "title": "Relation Type",
+            "default": "primary"
+          },
+          "order_position": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Order Position"
+          },
+          "document_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Document Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "document_id"
+        ],
+        "title": "NodeDocumentLinkCreate",
+        "description": "ノードとドキュメントのリンク作成リクエスト"
+      },
+      "NodeDocumentLinkResponse": {
+        "properties": {
+          "relation_type": {
+            "type": "string",
+            "title": "Relation Type",
+            "default": "primary"
+          },
+          "order_position": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Order Position"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "node_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Node Id"
+          },
+          "document_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Document Id"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "node_id",
+          "document_id",
+          "created_at"
+        ],
+        "title": "NodeDocumentLinkResponse",
+        "description": "ノードとドキュメントのリンク情報レスポンス"
+      },
+      "NodeDocumentsResponse": {
+        "properties": {
+          "node_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Node Id"
+          },
+          "node_title": {
+            "type": "string",
+            "title": "Node Title"
+          },
+          "documents": {
+            "items": {
+              "$ref": "#/components/schemas/DocumentResponse"
+            },
+            "type": "array",
+            "title": "Documents"
+          }
+        },
+        "type": "object",
+        "required": [
+          "node_id",
+          "node_title",
+          "documents"
+        ],
+        "title": "NodeDocumentsResponse",
+        "description": "ノードに関連するドキュメント一覧レスポンス"
+      },
+      "PaginatedDocumentResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DocumentResponse"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/PaginationMeta"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "meta"
+        ],
+        "title": "PaginatedDocumentResponse",
+        "description": "ページネーション付きドキュメント一覧レスポンス"
+      },
+      "PaginationMeta": {
+        "properties": {
+          "current_page": {
+            "type": "integer",
+            "title": "Current Page"
+          },
+          "total_pages": {
+            "type": "integer",
+            "title": "Total Pages"
+          },
+          "total_items": {
+            "type": "integer",
+            "title": "Total Items"
+          },
+          "items_per_page": {
+            "type": "integer",
+            "title": "Items Per Page"
+          }
+        },
+        "type": "object",
+        "required": [
+          "current_page",
+          "total_pages",
+          "total_items",
+          "items_per_page"
+        ],
+        "title": "PaginationMeta",
+        "description": "ページネーション情報"
       },
       "RoadmapCreateRequest": {
         "properties": {
@@ -1778,84 +2952,7 @@
         "title": "RoadmapDetailResponse",
         "description": "詳細情報を含むロードマップのレスポンススキーマ"
       },
-      "RoadmapEdge": {
-        "properties": {
-          "handle": {
-            "type": "string",
-            "title": "Handle"
-          },
-          "source_node_id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Source Node Id"
-          },
-          "target_node_id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Target Node Id"
-          },
-          "edge_type": {
-            "type": "string",
-            "title": "Edge Type",
-            "default": "default"
-          },
-          "label": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Label"
-          },
-          "metadata": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Metadata"
-          },
-          "id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Id"
-          },
-          "roadmap_id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Roadmap Id"
-          },
-          "created_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Created At"
-          },
-          "updated_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Updated At"
-          }
-        },
-        "type": "object",
-        "required": [
-          "handle",
-          "source_node_id",
-          "target_node_id",
-          "id",
-          "roadmap_id",
-          "created_at",
-          "updated_at"
-        ],
-        "title": "RoadmapEdge"
-      },
-      "RoadmapEdgeCreate": {
+      "RoadmapEdgeCreateRequest": {
         "properties": {
           "handle": {
             "type": "string",
@@ -1912,7 +3009,8 @@
           "target_node_id",
           "roadmap_id"
         ],
-        "title": "RoadmapEdgeCreate"
+        "title": "RoadmapEdgeCreateRequest",
+        "description": "ロードマップエッジの作成リクエストスキーマ"
       },
       "RoadmapEdgeRequest": {
         "properties": {
@@ -1994,6 +3092,28 @@
             "format": "uuid",
             "title": "Target Node Id"
           },
+          "source_handle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Handle"
+          },
+          "target_handle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Handle"
+          },
           "edge_type": {
             "type": "string",
             "title": "Edge Type"
@@ -2046,7 +3166,7 @@
         "title": "RoadmapEdgeResponse",
         "description": "ロードマップエッジのレスポンススキーマ"
       },
-      "RoadmapEdgeUpdate": {
+      "RoadmapEdgeUpdateRequest": {
         "properties": {
           "handle": {
             "anyOf": [
@@ -2119,7 +3239,8 @@
           }
         },
         "type": "object",
-        "title": "RoadmapEdgeUpdate"
+        "title": "RoadmapEdgeUpdateRequest",
+        "description": "ロードマップエッジの更新リクエストスキーマ"
       },
       "RoadmapListResponse": {
         "properties": {
@@ -2159,92 +3280,7 @@
         "title": "RoadmapListResponse",
         "description": "ロードマップ一覧のAPIレスポンス"
       },
-      "RoadmapNode": {
-        "properties": {
-          "handle": {
-            "type": "string",
-            "title": "Handle"
-          },
-          "node_type": {
-            "type": "string",
-            "title": "Node Type"
-          },
-          "title": {
-            "type": "string",
-            "title": "Title"
-          },
-          "description": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Description"
-          },
-          "position_x": {
-            "type": "number",
-            "title": "Position X",
-            "default": 0
-          },
-          "position_y": {
-            "type": "number",
-            "title": "Position Y",
-            "default": 0
-          },
-          "metadata": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Metadata"
-          },
-          "is_required": {
-            "type": "boolean",
-            "title": "Is Required",
-            "default": false
-          },
-          "id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Id"
-          },
-          "roadmap_id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Roadmap Id"
-          },
-          "created_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Created At"
-          },
-          "updated_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Updated At"
-          }
-        },
-        "type": "object",
-        "required": [
-          "handle",
-          "node_type",
-          "title",
-          "id",
-          "roadmap_id",
-          "created_at",
-          "updated_at"
-        ],
-        "title": "RoadmapNode"
-      },
-      "RoadmapNodeCreate": {
+      "RoadmapNodeCreateRequest": {
         "properties": {
           "handle": {
             "type": "string",
@@ -2309,7 +3345,8 @@
           "title",
           "roadmap_id"
         ],
-        "title": "RoadmapNodeCreate"
+        "title": "RoadmapNodeCreateRequest",
+        "description": "ロードマップノードの作成リクエストスキーマ"
       },
       "RoadmapNodeRequest": {
         "properties": {
@@ -2459,7 +3496,7 @@
         "title": "RoadmapNodeResponse",
         "description": "ロードマップノードのレスポンススキーマ"
       },
-      "RoadmapNodeUpdate": {
+      "RoadmapNodeUpdateRequest": {
         "properties": {
           "handle": {
             "anyOf": [
@@ -2552,7 +3589,8 @@
           }
         },
         "type": "object",
-        "title": "RoadmapNodeUpdate"
+        "title": "RoadmapNodeUpdateRequest",
+        "description": "ロードマップノードの更新リクエストスキーマ"
       },
       "RoadmapResponse": {
         "properties": {

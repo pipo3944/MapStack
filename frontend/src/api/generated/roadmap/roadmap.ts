@@ -36,13 +36,13 @@ import type {
   ReadThemesApiV1ThemesGetParams,
   RoadmapCreateRequest,
   RoadmapDetailApiResponse,
-  RoadmapEdge,
-  RoadmapEdgeCreate,
-  RoadmapEdgeUpdate,
+  RoadmapEdgeCreateRequest,
+  RoadmapEdgeResponse,
+  RoadmapEdgeUpdateRequest,
   RoadmapListResponse,
-  RoadmapNode,
-  RoadmapNodeCreate,
-  RoadmapNodeUpdate,
+  RoadmapNodeCreateRequest,
+  RoadmapNodeResponse,
+  RoadmapNodeUpdateRequest,
   RoadmapUpdateRequest,
   RoadmapVersionListResponse,
   ThemeCreateRequest,
@@ -1389,7 +1389,7 @@ export const readRoadmapNodesApiV1RoadmapsRoadmapIdNodesGet = (
 ) => {
       
       
-      return customInstance<RoadmapNode[]>(
+      return customInstance<RoadmapNodeResponse[]>(
       {url: `/api/v1/roadmaps/${roadmapId}/nodes`, method: 'GET', signal
     },
       );
@@ -1472,15 +1472,15 @@ export function useReadRoadmapNodesApiV1RoadmapsRoadmapIdNodesGet<TData = Awaite
  * @summary Create Roadmap Node Endpoint
  */
 export const createRoadmapNodeEndpointApiV1RoadmapsNodesPost = (
-    roadmapNodeCreate: RoadmapNodeCreate,
+    roadmapNodeCreateRequest: RoadmapNodeCreateRequest,
  signal?: AbortSignal
 ) => {
       
       
-      return customInstance<RoadmapNode>(
+      return customInstance<RoadmapNodeResponse>(
       {url: `/api/v1/roadmaps/nodes`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
-      data: roadmapNodeCreate, signal
+      data: roadmapNodeCreateRequest, signal
     },
       );
     }
@@ -1488,8 +1488,8 @@ export const createRoadmapNodeEndpointApiV1RoadmapsNodesPost = (
 
 
 export const getCreateRoadmapNodeEndpointApiV1RoadmapsNodesPostMutationOptions = <TError = HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createRoadmapNodeEndpointApiV1RoadmapsNodesPost>>, TError,{data: RoadmapNodeCreate}, TContext>, }
-): UseMutationOptions<Awaited<ReturnType<typeof createRoadmapNodeEndpointApiV1RoadmapsNodesPost>>, TError,{data: RoadmapNodeCreate}, TContext> => {
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createRoadmapNodeEndpointApiV1RoadmapsNodesPost>>, TError,{data: RoadmapNodeCreateRequest}, TContext>, }
+): UseMutationOptions<Awaited<ReturnType<typeof createRoadmapNodeEndpointApiV1RoadmapsNodesPost>>, TError,{data: RoadmapNodeCreateRequest}, TContext> => {
     
 const mutationKey = ['createRoadmapNodeEndpointApiV1RoadmapsNodesPost'];
 const {mutation: mutationOptions} = options ?
@@ -1501,7 +1501,7 @@ const {mutation: mutationOptions} = options ?
       
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createRoadmapNodeEndpointApiV1RoadmapsNodesPost>>, {data: RoadmapNodeCreate}> = (props) => {
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createRoadmapNodeEndpointApiV1RoadmapsNodesPost>>, {data: RoadmapNodeCreateRequest}> = (props) => {
           const {data} = props ?? {};
 
           return  createRoadmapNodeEndpointApiV1RoadmapsNodesPost(data,)
@@ -1513,18 +1513,18 @@ const {mutation: mutationOptions} = options ?
   return  { mutationFn, ...mutationOptions }}
 
     export type CreateRoadmapNodeEndpointApiV1RoadmapsNodesPostMutationResult = NonNullable<Awaited<ReturnType<typeof createRoadmapNodeEndpointApiV1RoadmapsNodesPost>>>
-    export type CreateRoadmapNodeEndpointApiV1RoadmapsNodesPostMutationBody = RoadmapNodeCreate
+    export type CreateRoadmapNodeEndpointApiV1RoadmapsNodesPostMutationBody = RoadmapNodeCreateRequest
     export type CreateRoadmapNodeEndpointApiV1RoadmapsNodesPostMutationError = HTTPValidationError
 
     /**
  * @summary Create Roadmap Node Endpoint
  */
 export const useCreateRoadmapNodeEndpointApiV1RoadmapsNodesPost = <TError = HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createRoadmapNodeEndpointApiV1RoadmapsNodesPost>>, TError,{data: RoadmapNodeCreate}, TContext>, }
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createRoadmapNodeEndpointApiV1RoadmapsNodesPost>>, TError,{data: RoadmapNodeCreateRequest}, TContext>, }
  , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof createRoadmapNodeEndpointApiV1RoadmapsNodesPost>>,
         TError,
-        {data: RoadmapNodeCreate},
+        {data: RoadmapNodeCreateRequest},
         TContext
       > => {
 
@@ -1538,14 +1538,14 @@ export const useCreateRoadmapNodeEndpointApiV1RoadmapsNodesPost = <TError = HTTP
  */
 export const updateRoadmapNodeEndpointApiV1RoadmapsNodesNodeIdPut = (
     nodeId: string,
-    roadmapNodeUpdate: RoadmapNodeUpdate,
+    roadmapNodeUpdateRequest: RoadmapNodeUpdateRequest,
  ) => {
       
       
-      return customInstance<RoadmapNode>(
+      return customInstance<RoadmapNodeResponse>(
       {url: `/api/v1/roadmaps/nodes/${nodeId}`, method: 'PUT',
       headers: {'Content-Type': 'application/json', },
-      data: roadmapNodeUpdate
+      data: roadmapNodeUpdateRequest
     },
       );
     }
@@ -1553,8 +1553,8 @@ export const updateRoadmapNodeEndpointApiV1RoadmapsNodesNodeIdPut = (
 
 
 export const getUpdateRoadmapNodeEndpointApiV1RoadmapsNodesNodeIdPutMutationOptions = <TError = HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateRoadmapNodeEndpointApiV1RoadmapsNodesNodeIdPut>>, TError,{nodeId: string;data: RoadmapNodeUpdate}, TContext>, }
-): UseMutationOptions<Awaited<ReturnType<typeof updateRoadmapNodeEndpointApiV1RoadmapsNodesNodeIdPut>>, TError,{nodeId: string;data: RoadmapNodeUpdate}, TContext> => {
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateRoadmapNodeEndpointApiV1RoadmapsNodesNodeIdPut>>, TError,{nodeId: string;data: RoadmapNodeUpdateRequest}, TContext>, }
+): UseMutationOptions<Awaited<ReturnType<typeof updateRoadmapNodeEndpointApiV1RoadmapsNodesNodeIdPut>>, TError,{nodeId: string;data: RoadmapNodeUpdateRequest}, TContext> => {
     
 const mutationKey = ['updateRoadmapNodeEndpointApiV1RoadmapsNodesNodeIdPut'];
 const {mutation: mutationOptions} = options ?
@@ -1566,7 +1566,7 @@ const {mutation: mutationOptions} = options ?
       
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateRoadmapNodeEndpointApiV1RoadmapsNodesNodeIdPut>>, {nodeId: string;data: RoadmapNodeUpdate}> = (props) => {
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateRoadmapNodeEndpointApiV1RoadmapsNodesNodeIdPut>>, {nodeId: string;data: RoadmapNodeUpdateRequest}> = (props) => {
           const {nodeId,data} = props ?? {};
 
           return  updateRoadmapNodeEndpointApiV1RoadmapsNodesNodeIdPut(nodeId,data,)
@@ -1578,18 +1578,18 @@ const {mutation: mutationOptions} = options ?
   return  { mutationFn, ...mutationOptions }}
 
     export type UpdateRoadmapNodeEndpointApiV1RoadmapsNodesNodeIdPutMutationResult = NonNullable<Awaited<ReturnType<typeof updateRoadmapNodeEndpointApiV1RoadmapsNodesNodeIdPut>>>
-    export type UpdateRoadmapNodeEndpointApiV1RoadmapsNodesNodeIdPutMutationBody = RoadmapNodeUpdate
+    export type UpdateRoadmapNodeEndpointApiV1RoadmapsNodesNodeIdPutMutationBody = RoadmapNodeUpdateRequest
     export type UpdateRoadmapNodeEndpointApiV1RoadmapsNodesNodeIdPutMutationError = HTTPValidationError
 
     /**
  * @summary Update Roadmap Node Endpoint
  */
 export const useUpdateRoadmapNodeEndpointApiV1RoadmapsNodesNodeIdPut = <TError = HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateRoadmapNodeEndpointApiV1RoadmapsNodesNodeIdPut>>, TError,{nodeId: string;data: RoadmapNodeUpdate}, TContext>, }
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateRoadmapNodeEndpointApiV1RoadmapsNodesNodeIdPut>>, TError,{nodeId: string;data: RoadmapNodeUpdateRequest}, TContext>, }
  , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof updateRoadmapNodeEndpointApiV1RoadmapsNodesNodeIdPut>>,
         TError,
-        {nodeId: string;data: RoadmapNodeUpdate},
+        {nodeId: string;data: RoadmapNodeUpdateRequest},
         TContext
       > => {
 
@@ -1669,7 +1669,7 @@ export const readRoadmapEdgesApiV1RoadmapsRoadmapIdEdgesGet = (
 ) => {
       
       
-      return customInstance<RoadmapEdge[]>(
+      return customInstance<RoadmapEdgeResponse[]>(
       {url: `/api/v1/roadmaps/${roadmapId}/edges`, method: 'GET', signal
     },
       );
@@ -1752,15 +1752,15 @@ export function useReadRoadmapEdgesApiV1RoadmapsRoadmapIdEdgesGet<TData = Awaite
  * @summary Create Roadmap Edge Endpoint
  */
 export const createRoadmapEdgeEndpointApiV1RoadmapsEdgesPost = (
-    roadmapEdgeCreate: RoadmapEdgeCreate,
+    roadmapEdgeCreateRequest: RoadmapEdgeCreateRequest,
  signal?: AbortSignal
 ) => {
       
       
-      return customInstance<RoadmapEdge>(
+      return customInstance<RoadmapEdgeResponse>(
       {url: `/api/v1/roadmaps/edges`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
-      data: roadmapEdgeCreate, signal
+      data: roadmapEdgeCreateRequest, signal
     },
       );
     }
@@ -1768,8 +1768,8 @@ export const createRoadmapEdgeEndpointApiV1RoadmapsEdgesPost = (
 
 
 export const getCreateRoadmapEdgeEndpointApiV1RoadmapsEdgesPostMutationOptions = <TError = HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createRoadmapEdgeEndpointApiV1RoadmapsEdgesPost>>, TError,{data: RoadmapEdgeCreate}, TContext>, }
-): UseMutationOptions<Awaited<ReturnType<typeof createRoadmapEdgeEndpointApiV1RoadmapsEdgesPost>>, TError,{data: RoadmapEdgeCreate}, TContext> => {
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createRoadmapEdgeEndpointApiV1RoadmapsEdgesPost>>, TError,{data: RoadmapEdgeCreateRequest}, TContext>, }
+): UseMutationOptions<Awaited<ReturnType<typeof createRoadmapEdgeEndpointApiV1RoadmapsEdgesPost>>, TError,{data: RoadmapEdgeCreateRequest}, TContext> => {
     
 const mutationKey = ['createRoadmapEdgeEndpointApiV1RoadmapsEdgesPost'];
 const {mutation: mutationOptions} = options ?
@@ -1781,7 +1781,7 @@ const {mutation: mutationOptions} = options ?
       
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createRoadmapEdgeEndpointApiV1RoadmapsEdgesPost>>, {data: RoadmapEdgeCreate}> = (props) => {
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createRoadmapEdgeEndpointApiV1RoadmapsEdgesPost>>, {data: RoadmapEdgeCreateRequest}> = (props) => {
           const {data} = props ?? {};
 
           return  createRoadmapEdgeEndpointApiV1RoadmapsEdgesPost(data,)
@@ -1793,18 +1793,18 @@ const {mutation: mutationOptions} = options ?
   return  { mutationFn, ...mutationOptions }}
 
     export type CreateRoadmapEdgeEndpointApiV1RoadmapsEdgesPostMutationResult = NonNullable<Awaited<ReturnType<typeof createRoadmapEdgeEndpointApiV1RoadmapsEdgesPost>>>
-    export type CreateRoadmapEdgeEndpointApiV1RoadmapsEdgesPostMutationBody = RoadmapEdgeCreate
+    export type CreateRoadmapEdgeEndpointApiV1RoadmapsEdgesPostMutationBody = RoadmapEdgeCreateRequest
     export type CreateRoadmapEdgeEndpointApiV1RoadmapsEdgesPostMutationError = HTTPValidationError
 
     /**
  * @summary Create Roadmap Edge Endpoint
  */
 export const useCreateRoadmapEdgeEndpointApiV1RoadmapsEdgesPost = <TError = HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createRoadmapEdgeEndpointApiV1RoadmapsEdgesPost>>, TError,{data: RoadmapEdgeCreate}, TContext>, }
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createRoadmapEdgeEndpointApiV1RoadmapsEdgesPost>>, TError,{data: RoadmapEdgeCreateRequest}, TContext>, }
  , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof createRoadmapEdgeEndpointApiV1RoadmapsEdgesPost>>,
         TError,
-        {data: RoadmapEdgeCreate},
+        {data: RoadmapEdgeCreateRequest},
         TContext
       > => {
 
@@ -1818,14 +1818,14 @@ export const useCreateRoadmapEdgeEndpointApiV1RoadmapsEdgesPost = <TError = HTTP
  */
 export const updateRoadmapEdgeEndpointApiV1RoadmapsEdgesEdgeIdPut = (
     edgeId: string,
-    roadmapEdgeUpdate: RoadmapEdgeUpdate,
+    roadmapEdgeUpdateRequest: RoadmapEdgeUpdateRequest,
  ) => {
       
       
-      return customInstance<RoadmapEdge>(
+      return customInstance<RoadmapEdgeResponse>(
       {url: `/api/v1/roadmaps/edges/${edgeId}`, method: 'PUT',
       headers: {'Content-Type': 'application/json', },
-      data: roadmapEdgeUpdate
+      data: roadmapEdgeUpdateRequest
     },
       );
     }
@@ -1833,8 +1833,8 @@ export const updateRoadmapEdgeEndpointApiV1RoadmapsEdgesEdgeIdPut = (
 
 
 export const getUpdateRoadmapEdgeEndpointApiV1RoadmapsEdgesEdgeIdPutMutationOptions = <TError = HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateRoadmapEdgeEndpointApiV1RoadmapsEdgesEdgeIdPut>>, TError,{edgeId: string;data: RoadmapEdgeUpdate}, TContext>, }
-): UseMutationOptions<Awaited<ReturnType<typeof updateRoadmapEdgeEndpointApiV1RoadmapsEdgesEdgeIdPut>>, TError,{edgeId: string;data: RoadmapEdgeUpdate}, TContext> => {
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateRoadmapEdgeEndpointApiV1RoadmapsEdgesEdgeIdPut>>, TError,{edgeId: string;data: RoadmapEdgeUpdateRequest}, TContext>, }
+): UseMutationOptions<Awaited<ReturnType<typeof updateRoadmapEdgeEndpointApiV1RoadmapsEdgesEdgeIdPut>>, TError,{edgeId: string;data: RoadmapEdgeUpdateRequest}, TContext> => {
     
 const mutationKey = ['updateRoadmapEdgeEndpointApiV1RoadmapsEdgesEdgeIdPut'];
 const {mutation: mutationOptions} = options ?
@@ -1846,7 +1846,7 @@ const {mutation: mutationOptions} = options ?
       
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateRoadmapEdgeEndpointApiV1RoadmapsEdgesEdgeIdPut>>, {edgeId: string;data: RoadmapEdgeUpdate}> = (props) => {
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateRoadmapEdgeEndpointApiV1RoadmapsEdgesEdgeIdPut>>, {edgeId: string;data: RoadmapEdgeUpdateRequest}> = (props) => {
           const {edgeId,data} = props ?? {};
 
           return  updateRoadmapEdgeEndpointApiV1RoadmapsEdgesEdgeIdPut(edgeId,data,)
@@ -1858,18 +1858,18 @@ const {mutation: mutationOptions} = options ?
   return  { mutationFn, ...mutationOptions }}
 
     export type UpdateRoadmapEdgeEndpointApiV1RoadmapsEdgesEdgeIdPutMutationResult = NonNullable<Awaited<ReturnType<typeof updateRoadmapEdgeEndpointApiV1RoadmapsEdgesEdgeIdPut>>>
-    export type UpdateRoadmapEdgeEndpointApiV1RoadmapsEdgesEdgeIdPutMutationBody = RoadmapEdgeUpdate
+    export type UpdateRoadmapEdgeEndpointApiV1RoadmapsEdgesEdgeIdPutMutationBody = RoadmapEdgeUpdateRequest
     export type UpdateRoadmapEdgeEndpointApiV1RoadmapsEdgesEdgeIdPutMutationError = HTTPValidationError
 
     /**
  * @summary Update Roadmap Edge Endpoint
  */
 export const useUpdateRoadmapEdgeEndpointApiV1RoadmapsEdgesEdgeIdPut = <TError = HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateRoadmapEdgeEndpointApiV1RoadmapsEdgesEdgeIdPut>>, TError,{edgeId: string;data: RoadmapEdgeUpdate}, TContext>, }
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateRoadmapEdgeEndpointApiV1RoadmapsEdgesEdgeIdPut>>, TError,{edgeId: string;data: RoadmapEdgeUpdateRequest}, TContext>, }
  , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof updateRoadmapEdgeEndpointApiV1RoadmapsEdgesEdgeIdPut>>,
         TError,
-        {edgeId: string;data: RoadmapEdgeUpdate},
+        {edgeId: string;data: RoadmapEdgeUpdateRequest},
         TContext
       > => {
 

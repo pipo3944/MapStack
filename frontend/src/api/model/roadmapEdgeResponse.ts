@@ -5,6 +5,8 @@
  * AI学習プラットフォーム MapStack のバックエンドAPI
  * OpenAPI spec version: 0.1.0
  */
+import type { RoadmapEdgeResponseSourceHandle } from './roadmapEdgeResponseSourceHandle';
+import type { RoadmapEdgeResponseTargetHandle } from './roadmapEdgeResponseTargetHandle';
 import type { RoadmapEdgeResponseLabel } from './roadmapEdgeResponseLabel';
 import type { RoadmapEdgeResponseMetadata } from './roadmapEdgeResponseMetadata';
 
@@ -17,6 +19,8 @@ export interface RoadmapEdgeResponse {
   handle: string;
   source_node_id: string;
   target_node_id: string;
+  source_handle?: RoadmapEdgeResponseSourceHandle;
+  target_handle?: RoadmapEdgeResponseTargetHandle;
   edge_type: string;
   label?: RoadmapEdgeResponseLabel;
   metadata?: RoadmapEdgeResponseMetadata;

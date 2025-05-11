@@ -42,6 +42,8 @@ def seed_roadmap_data_sync(session: Session) -> None:
             session.add(category)
             session.flush()
             logger.info(f"新規カテゴリーを作成: {category_data['title']}")
+        else:
+            logger.info(f"既存カテゴリーを使用: {category_data['title']}")
 
         # マッピング辞書に登録
         category_dict[category_data["code"]] = category.id
@@ -50,14 +52,14 @@ def seed_roadmap_data_sync(session: Session) -> None:
     logger.info("テーマデータの投入を開始します...")
     theme_dict = {}  # テーマコードとIDのマッピング
 
-    for category_code, themes in themes_by_category.items():
+    for category_code, themes_data in themes_by_category.items():
         if category_code not in category_dict:
-            logger.warning(f"カテゴリーコード '{category_code}' に対応するカテゴリーが見つかりません")
+            logger.warning(f"カテゴリーコード '{category_code}' は存在しません")
             continue
 
         category_id = category_dict[category_code]
 
-        for theme_data in themes:
+        for theme_data in themes_data:
             # テーマが既に存在するか確認
             stmt = select(Theme).where(Theme.code == theme_data["code"])
             result = session.execute(stmt)
@@ -66,133 +68,203 @@ def seed_roadmap_data_sync(session: Session) -> None:
             # 存在しない場合は新規作成
             if not theme:
                 theme = Theme(
+                    category_id=category_id,
                     code=theme_data["code"],
                     title=theme_data["title"],
                     description=theme_data["description"],
-                    category_id=category_id,
                     order_index=theme_data["order_index"]
                 )
                 session.add(theme)
                 session.flush()
                 logger.info(f"新規テーマを作成: {theme_data['title']}")
+            else:
+                logger.info(f"既存テーマを使用: {theme_data['title']}")
 
             # マッピング辞書に登録
             theme_dict[theme_data["code"]] = theme.id
 
-    # フロントエンドロードマップの作成（サンプル）
-    logger.info("フロントエンドロードマップのサンプルを作成します...")
+    # ロードマップの作成
+    logger.info("ロードマップデータの投入を開始します...")
+    roadmap_data = {
+        "theme_code": "frontend",
+        "version": "1.0.0",
+        "title": "フロントエンド開発ロードマップ",
+        "description": "フロントエンド開発の基礎から応用までのロードマップ",
+        "nodes": frontend_roadmap_nodes,
+        "edges": frontend_roadmap_edges
+    }
 
-    # フロントエンドテーマが存在するか確認
-    frontend_theme_id = theme_dict.get("frontend")
-    if not frontend_theme_id:
-        # テーマが存在しない場合は警告を出して終了
-        logger.warning("フロントエンドテーマが見つかりません。フロントエンドロードマップは作成されません。")
+    # ロードマップが既に存在するか確認
+    theme_id = theme_dict.get(roadmap_data["theme_code"])
+    if not theme_id:
+        logger.warning(f"テーマコード '{roadmap_data['theme_code']}' は存在しません")
+        return
+
+    stmt = select(Roadmap).where(
+        Roadmap.theme_id == theme_id,
+        Roadmap.version == roadmap_data["version"]
+    )
+    result = session.execute(stmt)
+    existing_roadmap = result.scalars().first()
+
+    if existing_roadmap:
+        logger.info(f"ロードマップは既に存在します: {roadmap_data['title']} (バージョン: {roadmap_data['version']})")
+        roadmap = existing_roadmap
     else:
-        # ロードマップの作成
-        frontend_roadmap = Roadmap(
-            title="フロントエンド開発ロードマップ",
-            description="フロントエンド開発の基礎から応用までのロードマップ",
-            theme_id=frontend_theme_id,
-            version="1.0.0",
+        # 新規ロードマップの作成
+        roadmap = Roadmap(
+            theme_id=theme_id,
+            version=roadmap_data["version"],
+            title=roadmap_data["title"],
+            description=roadmap_data["description"],
             is_published=True,
             is_latest=True,
             published_at=datetime.now()
         )
-        session.add(frontend_roadmap)
+        session.add(roadmap)
         session.flush()
+        logger.info(f"新規ロードマップを作成: {roadmap_data['title']}")
 
-        # ノードの作成
+    # ノードの作成（ロードマップが新規の場合のみ）
+    if not existing_roadmap:
+        logger.info("ノードデータの投入を開始します...")
         node_dict = {}  # ノードハンドルとIDのマッピング
 
-        for node_data in frontend_roadmap_nodes:
+        for node_data in roadmap_data["nodes"]:
             node = RoadmapNode(
-                roadmap_id=frontend_roadmap.id,
-                title=node_data["title"],
-                description=node_data["description"],
-                position_x=node_data["position_x"],
-                position_y=node_data["position_y"],
+                roadmap_id=roadmap.id,
                 handle=node_data["handle"],
                 node_type=node_data["node_type"],
-                is_required=False,
-                meta_data={
-                    "status": "未完了",
-                    "content_url": f"https://example.com/{node_data['handle']}",
-                    "concepts": [node_data["title"]],
-                    "resources": [
-                        {"title": f"{node_data['title']}の学習リソース", "url": f"https://example.com/{node_data['handle']}-resources"}
-                    ]
-                }
+                title=node_data["title"],
+                description=node_data.get("description", ""),
+                position_x=node_data["position_x"],
+                position_y=node_data["position_y"],
+                meta_data=node_data.get("meta_data", {}),
+                is_required=node_data.get("is_required", False)
             )
             session.add(node)
-            session.flush()
-            node_dict[node_data["handle"]] = node.id
+            node_dict[node_data["handle"]] = node  # ノードオブジェクトを一時保存
+
+        session.flush()
+        logger.info(f"{len(node_dict)} 件のノードを作成しました")
 
         # エッジの作成
-        for edge_data in frontend_roadmap_edges:
-            if edge_data["source_node_id"] in node_dict and edge_data["target_node_id"] in node_dict:
-                edge = RoadmapEdge(
-                    roadmap_id=frontend_roadmap.id,
-                    source_node_id=node_dict[edge_data["source_node_id"]],
-                    target_node_id=node_dict[edge_data["target_node_id"]],
-                    handle=edge_data["handle"],
-                    edge_type=edge_data["edge_type"],
-                    source_handle=edge_data.get("source_handle"),
-                    target_handle=edge_data.get("target_handle"),
-                    meta_data={}
-                )
-                session.add(edge)
+        logger.info("エッジデータの投入を開始します...")
+        for edge_data in roadmap_data["edges"]:
+            # ソースノードとターゲットノードが存在するか確認
+            if edge_data["source_node_id"] not in node_dict or edge_data["target_node_id"] not in node_dict:
+                logger.warning(f"エッジに関連するノードが見つかりません: {edge_data['handle']}")
+                continue
 
-    # React ロードマップサンプルも追加
-    logger.info("Reactロードマップのサンプルを作成します...")
-    if "react-native" in theme_dict:
-        react_theme_id = theme_dict["react-native"]
+            source_node = node_dict[edge_data["source_node_id"]]
+            target_node = node_dict[edge_data["target_node_id"]]
 
+            edge = RoadmapEdge(
+                roadmap_id=roadmap.id,
+                handle=edge_data["handle"],
+                source_node_id=source_node.id,
+                target_node_id=target_node.id,
+                edge_type=edge_data.get("edge_type", "default"),
+                source_handle=edge_data.get("source_handle"),
+                target_handle=edge_data.get("target_handle"),
+                meta_data=edge_data.get("meta_data", {})
+            )
+            session.add(edge)
+
+        session.flush()
+        logger.info(f"{len(roadmap_data['edges'])} 件のエッジを作成しました")
+
+    # React ロードマップの作成
+    react_roadmap_data = {
+        "theme_code": "react",
+        "version": "1.0.0",
+        "title": "React開発ロードマップ",
+        "description": "Reactの基礎から応用までのロードマップ",
+        "nodes": react_roadmap_nodes,
+        "edges": react_roadmap_edges
+    }
+
+    # React ロードマップが既に存在するか確認
+    react_theme_id = theme_dict.get(react_roadmap_data["theme_code"])
+    if not react_theme_id:
+        logger.warning(f"テーマコード '{react_roadmap_data['theme_code']}' は存在しません")
+        return
+
+    stmt = select(Roadmap).where(
+        Roadmap.theme_id == react_theme_id,
+        Roadmap.version == react_roadmap_data["version"]
+    )
+    result = session.execute(stmt)
+    existing_react_roadmap = result.scalars().first()
+
+    if existing_react_roadmap:
+        logger.info(f"Reactロードマップは既に存在します: {react_roadmap_data['title']} (バージョン: {react_roadmap_data['version']})")
+    else:
+        # 新規React ロードマップの作成
         react_roadmap = Roadmap(
-            title="React基礎から応用まで",
-            description="Reactの基礎から応用までのロードマップ",
             theme_id=react_theme_id,
-            version="1.0.0",
+            version=react_roadmap_data["version"],
+            title=react_roadmap_data["title"],
+            description=react_roadmap_data["description"],
             is_published=True,
             is_latest=True,
             published_at=datetime.now()
         )
         session.add(react_roadmap)
         session.flush()
+        logger.info(f"新規Reactロードマップを作成: {react_roadmap_data['title']}")
 
-        # ノード作成
-        nodes = []
-        for node_data in react_roadmap_nodes:
+        # React ノードの作成
+        logger.info("Reactノードデータの投入を開始します...")
+        react_node_dict = {}  # ノードハンドルとIDのマッピング
+
+        for node_data in react_roadmap_data["nodes"]:
             node = RoadmapNode(
                 roadmap_id=react_roadmap.id,
-                title=node_data["title"],
-                description=node_data["description"],
-                position_x=node_data["position_x"],
-                position_y=node_data["position_y"],
                 handle=node_data["handle"],
                 node_type=node_data["node_type"],
-                is_required=node_data["is_required"],
-                meta_data=node_data["meta_data"]
+                title=node_data["title"],
+                description=node_data.get("description", ""),
+                position_x=node_data["position_x"],
+                position_y=node_data["position_y"],
+                meta_data=node_data.get("meta_data", {}),
+                is_required=node_data.get("is_required", False)
             )
             session.add(node)
-            session.flush()
-            nodes.append(node)
+            react_node_dict[node_data["handle"]] = node  # ノードオブジェクトを一時保存
 
-        # エッジ作成（ノード間の関連付け）
-        for edge_data in react_roadmap_edges:
+        session.flush()
+        logger.info(f"{len(react_node_dict)} 件のReactノードを作成しました")
+
+        # React エッジの作成
+        logger.info("Reactエッジデータの投入を開始します...")
+        for edge_data in react_roadmap_data["edges"]:
+            # ソースノードとターゲットノードが存在するか確認
+            if edge_data["source_node_id"] not in react_node_dict or edge_data["target_node_id"] not in react_node_dict:
+                logger.warning(f"Reactエッジに関連するノードが見つかりません: {edge_data['handle']}")
+                continue
+
+            source_node = react_node_dict[edge_data["source_node_id"]]
+            target_node = react_node_dict[edge_data["target_node_id"]]
+
             edge = RoadmapEdge(
                 roadmap_id=react_roadmap.id,
-                source_node_id=nodes[edge_data["source_node_idx"]].id,
-                target_node_id=nodes[edge_data["target_node_idx"]].id,
                 handle=edge_data["handle"],
-                edge_type=edge_data["edge_type"],
+                source_node_id=source_node.id,
+                target_node_id=target_node.id,
+                edge_type=edge_data.get("edge_type", "default"),
                 source_handle=edge_data.get("source_handle"),
                 target_handle=edge_data.get("target_handle"),
-                meta_data={}
+                meta_data=edge_data.get("meta_data", {})
             )
             session.add(edge)
 
+        session.flush()
+        logger.info(f"{len(react_roadmap_data['edges'])} 件のReactエッジを作成しました")
+
+    # 変更をコミット
     session.commit()
-    logger.info("ロードマップデータのシードが完了しました（同期処理）")
+    logger.info("ロードマップデータの投入が完了しました")
 
 def run_seeds_sync(db):
     """
